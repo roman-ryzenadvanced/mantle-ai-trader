@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     default: "Mantle AI Trader | AI-Powered Crypto Trading Bot with News Analysis",
     template: "%s | Mantle AI Trader"
   },
-  description: "Advanced AI trading bot for cryptocurrency markets. Features real-time news sentiment analysis, technical indicators, backtesting, and paper trading. Built for Mantle Turing Test Hackathon with Bybit integration.",
+  description: "Advanced AI trading bot for cryptocurrency markets. FOR EDUCATIONAL PURPOSES ONLY. Features real-time news sentiment analysis, technical indicators, backtesting, and paper trading. Built for Mantle Turing Test Hackathon with Bybit integration.",
   keywords: [
     // Primary keywords
     "AI trading bot",
@@ -84,8 +84,8 @@ export const metadata: Metadata = {
     canonical: "https://github.com/roman-ryzenadvanced/mantle-ai-trader",
   },
   openGraph: {
-    title: "Mantle AI Trader | AI-Powered Crypto Trading Bot",
-    description: "Advanced AI trading bot with news sentiment analysis, technical indicators, backtesting, and paper trading. Built for Mantle Turing Test Hackathon.",
+    title: "Mantle AI Trader | AI-Powered Crypto Trading Bot (Educational)",
+    description: "Advanced AI trading bot with news sentiment analysis, technical indicators, backtesting, and paper trading. FOR EDUCATIONAL PURPOSES ONLY. Built for Mantle Turing Test Hackathon.",
     url: "https://github.com/roman-ryzenadvanced/mantle-ai-trader",
     siteName: "Mantle AI Trader",
     images: [
@@ -101,14 +101,14 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Mantle AI Trader | AI-Powered Crypto Trading Bot",
-    description: "Advanced AI trading bot with news sentiment analysis, technical indicators, and backtesting.",
+    title: "Mantle AI Trader | AI-Powered Crypto Trading Bot (Educational)",
+    description: "Advanced AI trading bot with news sentiment analysis, technical indicators, and backtesting. FOR EDUCATIONAL PURPOSES ONLY.",
     images: ["/og-image.png"],
     creator: "@rommarkdev",
     site: "@rommarkdev",
   },
   category: "technology",
-  classification: "Cryptocurrency Trading Software",
+  classification: "Educational Cryptocurrency Trading Software",
   other: {
     "revisit-after": "1 day",
     "language": "English",
@@ -116,6 +116,10 @@ export const metadata: Metadata = {
     "geo.placename": "Global",
     "distribution": "global",
     "rating": "general",
+    // Financial disclaimer meta tags
+    "financial-disclaimer": "This software is for educational purposes only. Trading involves substantial risk of loss.",
+    "investment-disclaimer": "NOT financial advice. Past performance does not guarantee future results.",
+    "risk-warning": "Cryptocurrency trading carries high risk. Never trade with money you cannot afford to lose.",
   },
 };
 
@@ -136,15 +140,15 @@ const jsonLd = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   "name": "Mantle AI Trader",
-  "description": "AI-powered cryptocurrency trading bot with news sentiment analysis, technical indicators, backtesting, and paper trading capabilities.",
+  "description": "AI-powered cryptocurrency trading bot with news sentiment analysis, technical indicators, backtesting, and paper trading capabilities. FOR EDUCATIONAL PURPOSES ONLY.",
   "url": "https://github.com/roman-ryzenadvanced/mantle-ai-trader",
-  "applicationCategory": "FinanceApplication",
+  "applicationCategory": "EducationalApplication",
   "operatingSystem": "Web, Linux, macOS, Windows",
   "offers": {
     "@type": "Offer",
     "price": "0",
     "priceCurrency": "USD",
-    "description": "Open source - Free to use"
+    "description": "Open source - Free to use for educational purposes"
   },
   "author": {
     "@type": "Organization",
@@ -162,7 +166,8 @@ const jsonLd = {
     "crypto signals",
     "trading automation",
     "Bybit API",
-    "Mantle hackathon"
+    "Mantle hackathon",
+    "educational trading software"
   ],
   "featureList": [
     "AI Signal Generation",
@@ -179,6 +184,8 @@ const jsonLd = {
   "programmingLanguage": "TypeScript",
   "runtimePlatform": "Node.js",
   "isAccessibleForFree": true,
+  "disclaimer": "This software is for educational and demonstration purposes only. Trading cryptocurrencies involves substantial risk of loss. Past performance does not guarantee future results. AI signals are NOT financial advice. Never trade with money you cannot afford to lose.",
+  "riskWarning": "Cryptocurrency trading carries a high level of risk and may not be suitable for all investors. You could lose all your investment."
 };
 
 export default function RootLayout({
@@ -200,6 +207,14 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="mobile-web-app-capable" content="yes" />
         <link rel="author" href="https://rommark.dev" />
+        {/* Financial Disclaimer Meta Tags */}
+        <meta name="financial-disclaimer" content="This software is for educational purposes only. Trading involves substantial risk of loss. Not financial advice." />
+        <meta name="risk-warning" content="Cryptocurrency trading carries high risk. Never trade with money you cannot afford to lose. Past performance does not guarantee future results." />
+        <meta name="investment-disclaimer" content="AI signals are algorithmic suggestions only. This is NOT financial advice. Consult a professional before investing." />
+        <meta name="educational-purpose" content="This software is designed for educational and demonstration purposes for the Mantle Turing Test Hackathon." />
+        {/* Legal Meta Tags */}
+        <meta name="no-liability" content="The creators are not responsible for any financial losses. Use at your own risk." />
+        <meta name="jurisdiction-warning" content="Cryptocurrency trading may be illegal in your jurisdiction. Ensure compliance with local laws." />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}

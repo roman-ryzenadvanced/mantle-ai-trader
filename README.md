@@ -46,6 +46,7 @@
 
 ## 📋 Table of Contents
 
+- [⚠️ Risk Disclaimer](#️-risk-disclaimer)
 - [Features](#-features)
 - [Demo](#-demo)
 - [Quick Start](#-quick-start)
@@ -57,6 +58,23 @@
 - [Testing](#-testing)
 - [Contributing](#-contributing)
 - [License](#-license)
+
+---
+
+## ⚠️ Risk Disclaimer
+
+> **🚨 CRITICAL WARNING - READ BEFORE USE 🚨**
+>
+> **This software is for EDUCATIONAL and DEMONSTRATION purposes ONLY.**
+>
+> - **TRADING INVOLVES SUBSTANTIAL RISK**: You could lose ALL your investment.
+> - **NO GUARANTEE OF PROFITS**: Past performance does NOT guarantee future results.
+> - **NOT FINANCIAL ADVICE**: AI signals are algorithmic suggestions, NOT professional advice.
+> - **USE AT YOUR OWN RISK**: The creators are NOT responsible for any financial losses.
+> - **PAPER TRADING RECOMMENDED**: Always test with demo mode before any live trading.
+> - **NEVER TRADE WITH MONEY YOU CANNOT AFFORD TO LOSE**.
+>
+> 📖 **Read the full [DISCLAIMER.md](./DISCLAIMER.md) before using this software.**
 
 ---
 

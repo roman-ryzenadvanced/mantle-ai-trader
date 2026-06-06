@@ -18,7 +18,8 @@ import {
 import {
   TrendingUp, TrendingDown, Activity, DollarSign, AlertTriangle,
   RefreshCw, Play, Square, BarChart3, Newspaper, Settings,
-  Brain, Target, Shield, Zap, CheckCircle, XCircle, Clock
+  Brain, Target, Shield, Zap, CheckCircle, XCircle, Clock,
+  AlertCircle, Info, X
 } from 'lucide-react';
 
 // Types
@@ -76,6 +77,7 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 export default function TradingDashboard() {
   // State
   const [connected, setConnected] = useState(false);
+  const [showDisclaimer, setShowDisclaimer] = useState(true);
   const [portfolio, setPortfolio] = useState<Portfolio>({
     totalValue: 10000,
     cashBalance: 10000,
@@ -241,6 +243,45 @@ export default function TradingDashboard() {
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
       <div className="max-w-7xl mx-auto space-y-6">
+        {/* Risk Disclaimer Banner */}
+        {showDisclaimer && (
+          <Alert className="border-red-500/50 bg-red-500/10 relative">
+            <AlertCircle className="h-4 w-4 text-red-500" />
+            <AlertTitle className="text-red-500 font-bold flex items-center gap-2">
+              ⚠️ RISK DISCLAIMER - IMPORTANT WARNING
+            </AlertTitle>
+            <AlertDescription className="text-sm space-y-2">
+              <p>
+                <strong>This software is for EDUCATIONAL and DEMONSTRATION purposes ONLY.</strong>
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                <li><strong>Trading involves SUBSTANTIAL RISK</strong> - You could lose ALL your investment</li>
+                <li><strong>NOT financial advice</strong> - AI signals are algorithmic suggestions only</li>
+                <li><strong>No guarantee of profits</strong> - Past performance does NOT guarantee future results</li>
+                <li><strong>Use PAPER TRADING mode</strong> - Test thoroughly before any live trading</li>
+                <li><strong>NEVER trade with money you cannot afford to lose</strong></li>
+              </ul>
+              <p className="text-xs text-muted-foreground mt-2">
+                By using this software, you acknowledge you have read and understood the full{' '}
+                <a href="https://github.com/roman-ryzenadvanced/mantle-ai-trader/blob/main/DISCLAIMER.md" 
+                   target="_blank" 
+                   rel="noopener noreferrer"
+                   className="underline text-primary hover:text-primary/80">
+                  Risk Disclaimer
+                </a>.
+              </p>
+            </AlertDescription>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="absolute top-2 right-2 h-6 w-6 p-0"
+              onClick={() => setShowDisclaimer(false)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </Alert>
+        )}
+
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
@@ -704,9 +745,30 @@ export default function TradingDashboard() {
         </Tabs>
 
         {/* Footer */}
-        <footer className="text-center text-sm text-muted-foreground py-4">
-          <p>Mantle AI Trader - Fundamental News-Based Trading Bot</p>
+        <footer className="text-center text-sm text-muted-foreground py-4 border-t">
+          <p className="font-semibold">Mantle AI Trader - Fundamental News-Based Trading Bot</p>
           <p className="mt-1">Built for Mantle Turing Test Hackathon</p>
+          <div className="mt-3 p-3 bg-muted/50 rounded-lg max-w-2xl mx-auto">
+            <p className="text-xs text-red-500/80 font-medium">
+              ⚠️ DISCLAIMER: This is educational software. Trading cryptocurrencies involves substantial risk of loss. 
+              Past performance is not indicative of future results. AI signals are NOT financial advice. 
+              Never trade with money you cannot afford to lose.
+            </p>
+            <a 
+              href="https://github.com/roman-ryzenadvanced/mantle-ai-trader/blob/main/DISCLAIMER.md" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-xs text-primary hover:underline mt-1 inline-block"
+            >
+              Read Full Risk Disclaimer →
+            </a>
+          </div>
+          <p className="mt-2 text-xs">
+            Made with ❤️ by{' '}
+            <a href="https://rommark.dev" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+              Rommark.Dev
+            </a>
+          </p>
         </footer>
       </div>
     </div>
