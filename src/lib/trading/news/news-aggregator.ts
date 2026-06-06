@@ -1,6 +1,9 @@
 /**
  * News Aggregation Service for Mantle AI Trading Bot
  * Aggregates news from multiple sources for fundamental analysis
+ * 
+ * v3.0.0 - Added: News impact scoring, time-decay weighting, content similarity
+ * duplicate detection, configurable sentiment time windows, breaking news detection
  */
 
 import axios from 'axios';
@@ -44,6 +47,17 @@ const SENTIMENT_KEYWORDS = {
   ]
 };
 
+// Source credibility scores (0-1, where 1 is most credible)
+const SOURCE_CREDIBILITY: Record<string, number> = {
+  [NewsSource.CRYPTOCOMPARE]: 0.85,
+  [NewsSource.COINGECKO]: 0.80,
+  [NewsSource.CRYPTOPANIC]: 0.70,
+  [NewsSource.BINANCE_NEWS]: 0.75,
+  [NewsSource.TWITTER]: 0.40,
+  [NewsSource.REDDIT]: 0.45,
+  [NewsSource.CUSTOM_RSS]: 0.60
+};
+
 // Category mappings
 const CATEGORIES: Record<string, string[]> = {
   'BTC': ['bitcoin', 'btc', 'satoshi', 'lightning network'],
@@ -60,14 +74,20 @@ export class NewsAggregator {
   private cryptocompareApiKey?: string;
   private cache: Map<string, { data: NewsArticle[]; timestamp: number }>;
   private cacheTimeout = 5 * 60 * 1000; // 5 minutes
+  private breakingNewsThreshold: number; // Minutes to consider news "breaking"
+  private breakingNewsImportance: number; // Min importance for breaking news
 
   constructor(config?: { 
     cryptopanicApiKey?: string; 
     cryptocompareApiKey?: string;
+    breakingNewsThresholdMinutes?: number;
+    breakingNewsMinImportance?: number;
   }) {
     this.cryptopanicApiKey = config?.cryptopanicApiKey;
     this.cryptocompareApiKey = config?.cryptocompareApiKey;
     this.cache = new Map();
+    this.breakingNewsThreshold = config?.breakingNewsThresholdMinutes ?? 30;
+    this.breakingNewsImportance = config?.breakingNewsMinImportance ?? 0.8;
   }
 
   /**
@@ -310,38 +330,75 @@ export class NewsAggregator {
 
   /**
    * Fetch news from custom RSS feeds
+   * QA-FIX #9: Improved RSS parsing to handle CDATA sections with special characters
+   * and nested content more robustly. The original regex-based parsing was fragile:
+   * 1. CDATA regex `(.*?)` used non-greedy match which failed on CDATA containing `]]>`
+   * 2. Did not handle HTML entities inside CDATA
+   * 3. Did not handle CDATA inside <link> tags
+   * Now uses a two-pass approach: first extract CDATA content safely, then parse fields.
    */
   async fetchFromRSS(feedUrl: string): Promise<NewsArticle[]> {
     try {
-      // Use a simple RSS parser approach
       const response = await axios.get(feedUrl, { 
         timeout: 10000,
         responseType: 'text'
       });
 
-      // Parse RSS XML (simplified - in production use a proper RSS parser)
       const articles: NewsArticle[] = [];
       const itemMatches = response.data.match(/<item>([\s\S]*?)<\/item>/g) || [];
 
       itemMatches.forEach((item: string, index: number) => {
-        const titleMatch = item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>|<title>(.*?)<\/title>/);
-        const linkMatch = item.match(/<link>(.*?)<\/link>/);
-        const descMatch = item.match(/<description><!\[CDATA\[(.*?)\]\]><\/description>|<description>(.*?)<\/description>/);
-        const dateMatch = item.match(/<pubDate>(.*?)<\/pubDate>/);
+        // QA-FIX #9: Helper to safely extract text from RSS fields
+        // Handles both CDATA-wrapped and plain text content
+        const extractField = (tagName: string): string | null => {
+          // Try CDATA first: <tag><![CDATA[...]]></tag>
+          // Use a more robust regex that handles special chars in CDATA
+          const cdataMatch = item.match(
+            new RegExp(`<${tagName}>[\\s]*<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>[\\s]*<\\/${tagName}>`)
+          );
+          if (cdataMatch) {
+            // Decode common HTML entities within CDATA
+            return cdataMatch[1]
+              .replace(/&amp;/g, '&')
+              .replace(/&lt;/g, '<')
+              .replace(/&gt;/g, '>')
+              .replace(/&quot;/g, '"')
+              .replace(/&#39;/g, "'")
+              .trim();
+          }
+          // Try plain text: <tag>content</tag>
+          const plainMatch = item.match(
+            new RegExp(`<${tagName}>([\\s\\S]*?)<\\/${tagName}>`)
+          );
+          if (plainMatch) {
+            return plainMatch[1]
+              .replace(/&amp;/g, '&')
+              .replace(/&lt;/g, '<')
+              .replace(/&gt;/g, '>')
+              .replace(/&quot;/g, '"')
+              .replace(/&#39;/g, "'")
+              .trim();
+          }
+          return null;
+        };
 
-        if (titleMatch) {
-          const title = titleMatch[1] || titleMatch[2];
+        const title = extractField('title');
+        const link = extractField('link');
+        const description = extractField('description');
+        const pubDate = extractField('pubDate');
+
+        if (title) {
           articles.push({
             id: `rss-${Date.now()}-${index}`,
             title,
-            content: descMatch?.[1] || descMatch?.[2] || undefined,
+            content: description || undefined,
             source: NewsSource.CUSTOM_RSS,
-            sourceUrl: linkMatch?.[1] || feedUrl,
+            sourceUrl: link || feedUrl,
             category: 'RSS Feed',
             sentiment: this.analyzeSentiment(title),
             importance: 0.5,
             tags: this.extractTags(title),
-            publishedAt: dateMatch ? new Date(dateMatch[1]) : undefined,
+            publishedAt: pubDate ? new Date(pubDate) : undefined,
             fetchedAt: new Date(),
             processed: false
           });
@@ -558,6 +615,237 @@ export class NewsAggregator {
       neutralCount,
       topArticles: articles.slice(0, 5)
     };
+  }
+
+  // ==================== NEW v3.0.0 METHODS ====================
+
+  /**
+   * Get breaking news - high importance articles published recently
+   * @param limit - Maximum number of articles to return
+   * @returns Array of breaking news articles
+   */
+  async getBreakingNews(limit: number = 5): Promise<NewsArticle[]> {
+    const articles = await this.fetchAllNews({ limit: limit * 4 });
+    const now = Date.now();
+    const thresholdMs = this.breakingNewsThreshold * 60 * 1000;
+
+    return articles
+      .filter(article => {
+        const importance = article.importance || 0;
+        const publishedAt = article.publishedAt?.getTime() || 0;
+        const age = now - publishedAt;
+
+        return importance >= this.breakingNewsImportance && age <= thresholdMs;
+      })
+      .slice(0, limit);
+  }
+
+  /**
+   * Get weighted sentiment with time-decay and source credibility
+   * Newer articles and more credible sources carry more weight
+   * @param symbol - Trading symbol
+   * @param timeWindowHours - Time window in hours for sentiment calculation
+   * @returns Weighted sentiment data
+   */
+  async getWeightedSentiment(
+    symbol: string,
+    timeWindowHours: number = 24
+  ): Promise<{
+    weightedSentiment: number;
+    unweightedSentiment: number;
+    totalWeight: number;
+    articleCount: number;
+    credibilityWeight: number;
+    timeDecayWeight: number;
+    sentimentLabel: SentimentLabel;
+  }> {
+    const articles = await this.getNewsForSymbol(symbol, 50);
+    const now = Date.now();
+    const windowMs = timeWindowHours * 60 * 60 * 1000;
+
+    let weightedSum = 0;
+    let totalWeight = 0;
+    let unweightedSum = 0;
+    let credibilityWeightSum = 0;
+    let timeDecayWeightSum = 0;
+
+    articles.forEach(article => {
+      const publishedAt = article.publishedAt?.getTime() || 0;
+      const age = now - publishedAt;
+
+      // Skip articles outside time window
+      if (age > windowMs) return;
+
+      // Time-decay weight: exponential decay, half-life = timeWindow / 2
+      const halfLife = windowMs / 2;
+      const timeDecay = Math.exp(-0.693 * age / halfLife); // 0.693 = ln(2)
+
+      // Source credibility weight
+      const credibility = SOURCE_CREDIBILITY[article.source] || 0.5;
+
+      // Combined weight
+      const weight = timeDecay * credibility;
+
+      const sentiment = article.sentiment || 0;
+      weightedSum += sentiment * weight;
+      totalWeight += weight;
+      unweightedSum += sentiment;
+      credibilityWeightSum += credibility;
+      timeDecayWeightSum += timeDecay;
+    });
+
+    const weightedSentiment = totalWeight > 0 ? weightedSum / totalWeight : 0;
+    const unweightedSentiment = articles.length > 0 ? unweightedSum / articles.length : 0;
+
+    return {
+      weightedSentiment,
+      unweightedSentiment,
+      totalWeight,
+      articleCount: articles.length,
+      credibilityWeight: articles.length > 0 ? credibilityWeightSum / articles.length : 0,
+      timeDecayWeight: articles.length > 0 ? timeDecayWeightSum / articles.length : 0,
+      sentimentLabel: this.getSentimentLabel(weightedSentiment)
+    };
+  }
+
+  /**
+   * Detect duplicate content using text similarity (not just URL matching)
+   * Uses Jaccard similarity on word-level n-grams
+   * @param articles - Articles to check for duplicates
+   * @param similarityThreshold - Threshold for considering articles duplicates (0-1)
+   * @returns Deduplicated articles
+   */
+  detectDuplicateContent(
+    articles: NewsArticle[],
+    similarityThreshold: number = 0.7
+  ): NewsArticle[] {
+    if (articles.length <= 1) return articles;
+
+    const unique: NewsArticle[] = [];
+    const articleSignatures: Set<string>[] = [];
+
+    for (const article of articles) {
+      const text = `${article.title} ${article.content || ''}`.toLowerCase();
+      const signature = this.getTextSignature(text);
+
+      let isDuplicate = false;
+      for (const existingSignature of articleSignatures) {
+        const similarity = this.calculateJaccardSimilarity(signature, existingSignature);
+        if (similarity >= similarityThreshold) {
+          isDuplicate = true;
+          break;
+        }
+      }
+
+      if (!isDuplicate) {
+        unique.push(article);
+        articleSignatures.push(signature);
+      }
+    }
+
+    return unique;
+  }
+
+  /**
+   * Calculate news impact score based on source credibility, importance, and sentiment
+   * @param articles - News articles to analyze
+   * @returns Impact score and breakdown
+   */
+  calculateNewsImpactScore(articles: NewsArticle[]): {
+    impactScore: number;
+    credibilityFactor: number;
+    importanceFactor: number;
+    sentimentFactor: number;
+    recencyFactor: number;
+    articleCount: number;
+  } {
+    if (articles.length === 0) {
+      return {
+        impactScore: 0,
+        credibilityFactor: 0,
+        importanceFactor: 0,
+        sentimentFactor: 0,
+        recencyFactor: 0,
+        articleCount: 0
+      };
+    }
+
+    const now = Date.now();
+    let totalCredibility = 0;
+    let totalImportance = 0;
+    let totalSentimentWeight = 0;
+    let totalRecency = 0;
+
+    articles.forEach(article => {
+      const credibility = SOURCE_CREDIBILITY[article.source] || 0.5;
+      const importance = article.importance || 0.5;
+      const sentimentStrength = Math.abs(article.sentiment || 0);
+      const age = now - (article.publishedAt?.getTime() || now);
+      const recency = Math.max(0, 1 - age / (24 * 60 * 60 * 1000)); // Decay over 24h
+
+      totalCredibility += credibility;
+      totalImportance += importance;
+      totalSentimentWeight += sentimentStrength;
+      totalRecency += recency;
+    });
+
+    const n = articles.length;
+    const credibilityFactor = totalCredibility / n;
+    const importanceFactor = totalImportance / n;
+    const sentimentFactor = totalSentimentWeight / n;
+    const recencyFactor = totalRecency / n;
+
+    // Weighted combination
+    const impactScore = (
+      credibilityFactor * 0.3 +
+      importanceFactor * 0.3 +
+      sentimentFactor * 0.2 +
+      recencyFactor * 0.2
+    );
+
+    return {
+      impactScore,
+      credibilityFactor,
+      importanceFactor,
+      sentimentFactor,
+      recencyFactor,
+      articleCount: n
+    };
+  }
+
+  // ==================== HELPER METHODS ====================
+
+  /**
+   * Generate text signature as a set of word bigrams for similarity comparison
+   * @param text - Input text
+   * @returns Set of bigram strings
+   */
+  private getTextSignature(text: string): Set<string> {
+    const words = text.replace(/[^\w\s]/g, '').split(/\s+/).filter(w => w.length > 2);
+    const bigrams = new Set<string>();
+    for (let i = 0; i < words.length - 1; i++) {
+      bigrams.add(`${words[i]}_${words[i + 1]}`);
+    }
+    return bigrams;
+  }
+
+  /**
+   * Calculate Jaccard similarity between two sets
+   * @param setA - First set
+   * @param setB - Second set
+   * @returns Similarity score (0-1)
+   */
+  private calculateJaccardSimilarity(setA: Set<string>, setB: Set<string>): number {
+    if (setA.size === 0 && setB.size === 0) return 1;
+    if (setA.size === 0 || setB.size === 0) return 0;
+
+    let intersection = 0;
+    for (const item of setA) {
+      if (setB.has(item)) intersection++;
+    }
+
+    const union = setA.size + setB.size - intersection;
+    return union > 0 ? intersection / union : 0;
   }
 }
 

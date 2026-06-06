@@ -6,6 +6,7 @@
 
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { SignalEngine } from '../../src/lib/trading/signals/signal-engine';
+import { calculateIchimoku, calculateStochastic, calculateBollingerBands } from '../../src/lib/trading/signals/signal-engine';
 import { TimeFrame, TradeAction, MarketDataPoint, SentimentLabel, SignalStatus } from '../../src/lib/trading/core/types';
 
 describe('SignalEngine v2.0.0', () => {

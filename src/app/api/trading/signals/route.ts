@@ -1,20 +1,53 @@
 /**
  * Trading Signals API Routes for Mantle AI Trading Bot
+ * v3.0.0 - Added zod validation, signal quality scoring, multi-timeframe support
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { signalEngine } from '@/lib/trading/signals/signal-engine';
 import { newsAggregator } from '@/lib/trading/news/news-aggregator';
 import { TimeFrame } from '@/lib/trading/core/types';
 import { db } from '@/lib/db';
 
+// ==================== ZOD SCHEMAS ====================
+
+const validSymbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'AVAXUSDT', 'DOTUSDT'];
+const validTimeframes = Object.values(TimeFrame);
+
+const getSignalsSchema = z.object({
+  symbol: z.string().optional(),
+  status: z.enum(['PENDING', 'ACTIVE', 'EXECUTED', 'CANCELLED', 'EXPIRED']).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+});
+
+const generateSignalSchema = z.object({
+  symbol: z.string().refine(
+    (val): val is string => validSymbols.includes(val),
+    { message: `Symbol must be one of: ${validSymbols.join(', ')}` }
+  ),
+  timeframe: z.string().refine(
+    (val): val is string => validTimeframes.includes(val as TimeFrame),
+    { message: `Timeframe must be one of: ${validTimeframes.join(', ')}` }
+  ).default(TimeFrame.ONE_HOUR),
+  demo: z.boolean().default(true),
+});
+
 // GET /api/trading/signals - Get signals
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const symbol = searchParams.get('symbol');
-    const status = searchParams.get('status');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const params = Object.fromEntries(searchParams.entries());
+    
+    const validation = getSignalsSchema.safeParse(params);
+    if (!validation.success) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid parameters', details: validation.error.flatten() },
+        { status: 400 }
+      );
+    }
+
+    const { symbol, status, limit } = validation.data;
 
     const where: Record<string, unknown> = {};
     if (symbol) where.symbol = symbol;
@@ -40,14 +73,16 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { symbol, timeframe = '1h', demo = true } = body;
-
-    if (!symbol) {
+    
+    const validation = generateSignalSchema.safeParse(body);
+    if (!validation.success) {
       return NextResponse.json(
-        { success: false, error: 'Symbol is required' },
+        { success: false, error: 'Invalid request body', details: validation.error.flatten() },
         { status: 400 }
       );
     }
+
+    const { symbol, timeframe, demo } = validation.data;
 
     // Generate simulated market data (in production, fetch from Bybit)
     const marketData = generateDemoMarketData(symbol, 200);
@@ -63,18 +98,25 @@ export async function POST(request: NextRequest) {
       newsArticles: news
     });
 
+    // Calculate signal quality score
+    const qualityScore = signalEngine.calculateSignalQualityScore(
+      signalOutput.analysis.technicalAnalysis,
+      signalOutput.analysis.sentimentAnalysis,
+      signalOutput.signal.action
+    );
+
     // Save signal to database
     const savedSignal = await db.signal.create({
       data: {
         symbol: signalOutput.signal.symbol,
         action: signalOutput.signal.action,
         confidence: signalOutput.signal.confidence,
-        rating: 0,
+        rating: qualityScore,
         priceTarget: signalOutput.signal.priceTarget,
         stopLoss: signalOutput.signal.stopLoss,
         takeProfit: signalOutput.signal.takeProfit,
         reasoning: signalOutput.signal.reasoning,
-        newsSources: signalOutput.signal.newsSources || [],
+        newsSources: (signalOutput.signal.newsSources || []).join(','),
         sentimentScore: signalOutput.signal.sentimentScore,
         technicalScore: signalOutput.signal.technicalScore,
         fundamentalScore: signalOutput.signal.fundamentalScore,
@@ -88,7 +130,8 @@ export async function POST(request: NextRequest) {
       data: {
         signal: savedSignal,
         analysis: signalOutput.analysis,
-        riskAssessment: signalOutput.riskAssessment
+        riskAssessment: signalOutput.riskAssessment,
+        qualityScore
       }
     });
   } catch (error) {

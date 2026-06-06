@@ -37,6 +37,9 @@ export class BacktestEngine {
       results: []
     };
 
+    // QA-FIX #7: Calculate the actual period in days for annualized return
+    const periodDays = Math.max(1, (config.endDate.getTime() - config.startDate.getTime()) / (1000 * 60 * 60 * 24));
+
     // Local state - prevents leakage between concurrent runs
     let trades: BacktestResult[] = [];
     let equityCurve: number[] = [];
@@ -88,11 +91,13 @@ export class BacktestEngine {
       }
 
       // Calculate final metrics
+      // QA-FIX #7: Pass periodDays to calculatePerformanceMetrics for proper annualization
       const metrics = this.calculatePerformanceMetrics(
         config.initialCapital,
         currentCapital,
         trades,
-        equityCurve
+        equityCurve,
+        periodDays
       );
 
       // Update session with results
@@ -280,12 +285,16 @@ export class BacktestEngine {
   /**
    * Calculate performance metrics
    * Fixed: Now takes trades and equity curve as parameters (no shared state)
+   * QA-FIX #7: Added periodDays parameter for correct annualized return calculation.
+   * The original formula `Math.pow(final/initial, 365/365)` simplifies to just `final/initial`,
+   * making annualization meaningless. Now uses actual period for compounding.
    */
   private calculatePerformanceMetrics(
     initialCapital: number,
     finalCapital: number,
     trades: BacktestResult[],
-    equityCurve: number[]
+    equityCurve: number[],
+    periodDays: number = 365
   ): PerformanceMetrics {
     const winningTrades = trades.filter(t => (t.pnl || 0) > 0);
     const losingTrades = trades.filter(t => (t.pnl || 0) <= 0);
@@ -294,9 +303,11 @@ export class BacktestEngine {
       ? ((finalCapital - initialCapital) / initialCapital) * 100 
       : 0;
 
-    // Calculate annualized return
-    const annualizedReturn = initialCapital > 0 
-      ? ((Math.pow(finalCapital / initialCapital, 365 / 365) - 1) * 100) 
+    // QA-FIX #7: Calculate annualized return using the actual period
+    // Original formula Math.pow(final/initial, 365/365) always equals final/initial (useless).
+    // Correct formula: ((final/initial) ^ (365/periodDays)) - 1
+    const annualizedReturn = initialCapital > 0 && periodDays > 0
+      ? ((Math.pow(finalCapital / initialCapital, 365 / periodDays) - 1) * 100) 
       : 0;
 
     // Calculate Sharpe Ratio from trade returns
@@ -405,11 +416,14 @@ export class BacktestEngine {
         const session = await this.runBacktest(config);
         
         if (session.status === 'COMPLETED') {
+          // QA-FIX #7: Pass periodDays for proper annualization in optimization
+          const optPeriodDays = Math.max(1, (config.endDate.getTime() - config.startDate.getTime()) / (1000 * 60 * 60 * 24));
           const metrics = this.calculatePerformanceMetrics(
             config.initialCapital,
             session.finalCapital || config.initialCapital,
             session.results,
-            []
+            [],
+            optPeriodDays
           );
 
           results.push({ parameters: params, metrics });
@@ -480,11 +494,14 @@ export class BacktestEngine {
   generateReport(session: BacktestSession): string {
     const initialCapital = session.initialCapital;
     const finalCapital = session.finalCapital || initialCapital;
+    // QA-FIX #7: Pass periodDays for proper annualization in report generation
+    const reportPeriodDays = Math.max(1, (session.endDate.getTime() - session.startDate.getTime()) / (1000 * 60 * 60 * 24));
     const metrics = this.calculatePerformanceMetrics(
       initialCapital,
       finalCapital,
       session.results,
-      []
+      [],
+      reportPeriodDays
     );
 
     return `

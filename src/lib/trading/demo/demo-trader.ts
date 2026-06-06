@@ -2,6 +2,10 @@
  * Demo Trading Mode for Mantle AI Trading Bot
  * Paper trading system for testing signals without real money
  * 
+ * v4.0.0 - Added: Circuit Breaker pattern for consecutive loss protection,
+ * position size recovery after cooldown
+ * v3.0.0 - Added: Trailing stop loss, partial position closing, position averaging,
+ * realized PnL tracking with fees, commission calculation, margin call simulation
  * v2.0.0 - Fixed: Short position cash handling, leverage effect, portfolio protection,
  * stop-loss/take-profit race conditions, and proper PnL calculations
  */
@@ -16,6 +20,43 @@ import {
   OrderStatus,
   Ticker
 } from '../core/types';
+
+// ==================== CIRCUIT BREAKER ====================
+
+/** Configuration options for the circuit breaker */
+export interface CircuitBreakerConfig {
+  /** Number of consecutive losses that triggers the circuit breaker (default: 5) */
+  consecutiveLossThreshold: number;
+  /** Cooldown duration in milliseconds before trading can resume (default: 30 minutes) */
+  cooldownDurationMs: number;
+  /** Position size multiplier when resuming after cooldown (default: 0.5 = 50%) */
+  reducedPositionMultiplier: number;
+  /** How much to restore per winning trade after cooldown (default: 0.25 = 25%) */
+  recoveryStep: number;
+}
+
+/** Current state of the circuit breaker */
+export type CircuitBreakerState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+
+/** Detailed status of the circuit breaker for monitoring */
+export interface CircuitBreakerStatus {
+  /** Current state: CLOSED (normal), OPEN (halted), HALF_OPEN (recovering) */
+  state: CircuitBreakerState;
+  /** Number of consecutive losses currently tracked */
+  consecutiveLosses: number;
+  /** Total trades placed while breaker was active */
+  totalTradesWhileActive: number;
+  /** Timestamp when the breaker was tripped (null if not OPEN) */
+  trippedAt: Date | null;
+  /** Timestamp when cooldown expires (null if not OPEN) */
+  cooldownExpiresAt: Date | null;
+  /** Current position size multiplier (1.0 = normal, <1.0 = reduced) */
+  positionSizeMultiplier: number;
+  /** Number of consecutive losses threshold */
+  threshold: number;
+  /** Number of winning trades since entering HALF_OPEN state */
+  recoveryWins: number;
+}
 
 export interface DemoOrder {
   id: string;
@@ -47,8 +88,34 @@ export interface DemoPosition {
   leverage: number;
   stopLoss?: number;
   takeProfit?: number;
+  trailingStop?: number;
+  trailingStopDistance?: number;
+  trailingStopActivated?: boolean;
   openedAt: Date;
   signalId?: string;
+  realizedPnL?: number;
+  totalFees?: number;
+}
+
+/** Commission rates for maker/taker fees */
+export interface CommissionRates {
+  makerFee: number; // Fee for limit orders (e.g., 0.0002 = 0.02%)
+  takerFee: number; // Fee for market orders (e.g., 0.0005 = 0.05%)
+}
+
+/** Realized trade PnL record */
+export interface RealizedTradePnL {
+  id: string;
+  symbol: string;
+  side: 'LONG' | 'SHORT';
+  entryPrice: number;
+  exitPrice: number;
+  quantity: number;
+  realizedPnL: number;
+  fees: number;
+  netPnL: number;
+  pnlPercent: number;
+  closedAt: Date;
 }
 
 export class DemoTrader {
@@ -59,8 +126,20 @@ export class DemoTrader {
   private currentPrices: Map<string, number> = new Map();
   private listeners: Set<(event: string, data: unknown) => void> = new Set();
   private isProcessingStopLevel = false; // Guard against re-entrancy
+  private commissionRates: CommissionRates;
+  private realizedTrades: RealizedTradePnL[] = [];
+  private marginCallThreshold: number; // Margin ratio below which margin call triggers
 
-  constructor(initialCapital: number = 10000) {
+  // Circuit Breaker state
+  private consecutiveLosses: number = 0;
+  private circuitBreakerState: CircuitBreakerState = 'CLOSED';
+  private circuitBreakerTrippedAt: Date | null = null;
+  private circuitBreakerCooldownExpiresAt: Date | null = null;
+  private positionSizeMultiplier: number = 1.0;
+  private recoveryWins: number = 0;
+  private circuitBreakerConfig: CircuitBreakerConfig;
+
+  constructor(initialCapital: number = 10000, commissionRates?: Partial<CommissionRates>, circuitBreakerConfig?: Partial<CircuitBreakerConfig>) {
     this.portfolio = {
       id: 'demo-portfolio',
       name: 'Demo Portfolio',
@@ -70,6 +149,17 @@ export class DemoTrader {
       unrealizedPnL: 0,
       positions: [],
       demo: true
+    };
+    this.commissionRates = {
+      makerFee: commissionRates?.makerFee ?? 0.0002,  // 0.02% maker
+      takerFee: commissionRates?.takerFee ?? 0.0005   // 0.05% taker
+    };
+    this.marginCallThreshold = 0.5; // 50% margin ratio
+    this.circuitBreakerConfig = {
+      consecutiveLossThreshold: circuitBreakerConfig?.consecutiveLossThreshold ?? 5,
+      cooldownDurationMs: circuitBreakerConfig?.cooldownDurationMs ?? 30 * 60 * 1000, // 30 minutes
+      reducedPositionMultiplier: circuitBreakerConfig?.reducedPositionMultiplier ?? 0.5,
+      recoveryStep: circuitBreakerConfig?.recoveryStep ?? 0.25
     };
   }
 
@@ -148,6 +238,12 @@ export class DemoTrader {
         ? (position.unrealizedPnL / positionCost) * 100 
         : 0;
 
+      // Update trailing stop if configured
+      this.updateTrailingStop(position);
+
+      // Check margin call
+      this.checkMarginCall();
+
       // Check stop loss and take profit (with re-entrancy guard)
       this.checkStopLevels(position);
     }
@@ -169,6 +265,8 @@ export class DemoTrader {
 
   /**
    * Place a demo order
+   * v4.0.0 - Added circuit breaker check: blocks trading when breaker is OPEN,
+   * applies reduced position size when in HALF_OPEN recovery mode
    */
   placeOrder(params: {
     symbol: string;
@@ -189,6 +287,23 @@ export class DemoTrader {
     if (params.leverage !== undefined && (params.leverage < 1 || params.leverage > 100)) {
       throw new Error('Leverage must be between 1 and 100');
     }
+
+    // Circuit breaker check: update state first
+    this.updateCircuitBreakerState();
+
+    if (this.circuitBreakerState === 'OPEN') {
+      throw new Error('Circuit breaker is OPEN: trading halted due to consecutive losses. Please wait for cooldown.');
+    }
+
+    // Apply position size multiplier if in HALF_OPEN (recovery) mode
+    const adjustedQuantity = this.circuitBreakerState === 'HALF_OPEN'
+      ? params.quantity * this.positionSizeMultiplier
+      : params.quantity;
+
+    if (adjustedQuantity <= 0) {
+      throw new Error('Position size reduced to zero by circuit breaker recovery. Wait for more wins.');
+    }
+
     const leverage = params.leverage || 1;
 
     const currentPrice = this.currentPrices.get(params.symbol) || 0;
@@ -235,7 +350,7 @@ export class DemoTrader {
       symbol: params.symbol,
       side: params.side,
       type: params.type,
-      quantity: params.quantity,
+      quantity: adjustedQuantity,
       price: executionPrice,
       leverage,
       stopLoss: params.stopLoss,
@@ -470,6 +585,9 @@ export class DemoTrader {
       this.portfolio.cashBalance -= marginRequired;
     }
 
+    // Calculate commission fee
+    const fee = this.calculateCommission(order.price, order.quantity, order.type);
+    
     order.status = OrderStatus.FILLED;
     order.filledAt = new Date();
     this.tradeHistory.push(order);
@@ -481,6 +599,7 @@ export class DemoTrader {
   /**
    * Close existing position
    * Fixed: Proper PnL calculation and cash handling for shorts
+   * v4.0.0 - Added circuit breaker loss/win tracking on position close
    */
   private closeExistingPosition(position: DemoPosition, order: DemoOrder): void {
     const closeQuantity = Math.min(position.quantity, order.quantity);
@@ -495,9 +614,33 @@ export class DemoTrader {
       pnl = (position.avgEntryPrice - order.price) * closeQuantity * position.leverage;
     }
 
+    // Calculate closing commission fee
+    const closeFee = this.calculateCommission(order.price, closeQuantity, order.type);
+    pnl -= closeFee; // Deduct fee from PnL
+
     // Update order PnL
     order.pnl = pnl;
     order.closedAt = new Date();
+
+    // Track realized trade with fees
+    const entryCost = position.avgEntryPrice * closeQuantity;
+    this.realizedTrades.push({
+      id: `rpnl-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      symbol: position.symbol,
+      side: position.side,
+      entryPrice: position.avgEntryPrice,
+      exitPrice: order.price,
+      quantity: closeQuantity,
+      realizedPnL: pnl + closeFee, // PnL before closing fee
+      fees: closeFee,
+      netPnL: pnl, // After fees
+      pnlPercent: entryCost > 0 ? (pnl / entryCost) * 100 : 0,
+      closedAt: new Date()
+    });
+
+    // Update position-level realized PnL tracking
+    position.realizedPnL = (position.realizedPnL || 0) + pnl;
+    position.totalFees = (position.totalFees || 0) + closeFee;
 
     // Update portfolio
     this.portfolio.realizedPnL += pnl;
@@ -530,6 +673,9 @@ export class DemoTrader {
         result: pnl > 0 ? 'WIN' : pnl < 0 ? 'LOSS' : 'NEUTRAL'
       });
     }
+
+    // Circuit breaker: track consecutive wins/losses
+    this.recordTradeResult(pnl);
   }
 
   /**
@@ -631,7 +777,161 @@ export class DemoTrader {
   }
 
   /**
+   * Update trailing stop for a position (public API)
+   * Sets a trailing stop distance and activates it on next price update
+   * The trailing stop moves up with the price for LONG positions, 
+   * and moves down for SHORT positions
+   */
+  updateTrailingStop(symbolOrPosition: string | DemoPosition, trailPercentOrUndefined?: number): boolean | void {
+    // QA-FIX #8: Merged the two conflicting updateTrailingStop methods into one.
+    // The original code had a public method updateTrailingStop(symbol, trailPercent) at line 707
+    // and a private method updateTrailingStop(position) at line 872. In JavaScript, the latter
+    // would override the former, making the public API inaccessible. Now we use a single
+    // overloaded method that handles both call signatures.
+    if (typeof symbolOrPosition === 'string') {
+      // Public API: updateTrailingStop(symbol, trailPercent)
+      const symbol = symbolOrPosition;
+      const trailPercent = trailPercentOrUndefined;
+      if (trailPercent === undefined) return false;
+      const position = this.positions.get(symbol);
+      if (!position || trailPercent <= 0 || trailPercent >= 100) return false;
+
+      if (position.side === 'LONG') {
+        const newStop = position.currentPrice * (1 - trailPercent / 100);
+        if (!position.stopLoss || newStop > position.stopLoss) {
+          position.stopLoss = newStop;
+          this.emit('trailing_stop_updated', { symbol, newStop, side: 'LONG' });
+          return true;
+        }
+      } else {
+        const newStop = position.currentPrice * (1 + trailPercent / 100);
+        if (!position.stopLoss || newStop < position.stopLoss) {
+          position.stopLoss = newStop;
+          this.emit('trailing_stop_updated', { symbol, newStop, side: 'SHORT' });
+          return true;
+        }
+      }
+      return false;
+    } else {
+      // Internal: updateTrailingStop(position) - called from updatePrice()
+      const position = symbolOrPosition;
+      if (!position.trailingStopDistance || position.trailingStopDistance <= 0) return;
+
+      const distance = position.trailingStopDistance;
+      const price = position.currentPrice;
+
+      if (position.side === 'LONG') {
+        const newStop = price - distance;
+        if (!position.trailingStop || newStop > position.trailingStop) {
+          position.trailingStop = newStop;
+          if (!position.trailingStopActivated && price > position.avgEntryPrice + distance) {
+            position.trailingStopActivated = true;
+          }
+        }
+      } else {
+        const newStop = price + distance;
+        if (!position.trailingStop || newStop < position.trailingStop) {
+          position.trailingStop = newStop;
+          if (!position.trailingStopActivated && price < position.avgEntryPrice - distance) {
+            position.trailingStopActivated = true;
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Close a portion of a position (partial close)
+   * QA-FIX #4: Removed duplicate closePositionPartial. The original code had two definitions
+   * at lines 738 and 925. In JS, the second definition overrode the first. The first used
+   * placeOrder() directly while the second delegated to closePosition(). We keep the version
+   * that delegates to closePosition() for consistency, and remove the dead duplicate.
+   * @param symbol - Symbol to partially close
+   * @param percent - Percentage of position to close (1-100)
+   */
+  closePositionPartial(symbol: string, percent: number): DemoOrder | null {
+    const position = this.positions.get(symbol);
+    if (!position) return null;
+
+    if (percent <= 0 || percent > 100) {
+      throw new Error('Percent must be between 1 and 100');
+    }
+
+    const closeQuantity = (position.quantity * percent) / 100;
+    if (closeQuantity <= 0) return null;
+
+    return this.closePosition(symbol, closeQuantity);
+  }
+
+  /**
+   * Check for margin call conditions
+   * QA-FIX #5: Removed duplicate checkMarginCall() that returned string[].
+   * The original code had two definitions: one returning boolean (line 770) and one
+   * returning string[] (line 976). In JS, the last definition wins, silently changing
+   * the return type. Now we have a single method that returns an object with both
+   * the boolean status and the list of liquidated symbols.
+   * @returns Object with isMarginCall boolean and closedSymbols array
+   */
+  checkMarginCall(): { isMarginCall: boolean; closedSymbols: string[] } {
+    if (this.positions.size === 0) return { isMarginCall: false, closedSymbols: [] };
+
+    const closedSymbols: string[] = [];
+
+    this.positions.forEach((position) => {
+      const positionMargin = (position.avgEntryPrice * position.quantity) / position.leverage;
+      const positionValue = position.side === 'LONG'
+        ? position.currentPrice * position.quantity
+        : (2 * position.avgEntryPrice - position.currentPrice) * position.quantity;
+
+      const marginRatio = positionMargin > 0 ? positionValue / positionMargin : 0;
+
+      if (marginRatio < this.marginCallThreshold && marginRatio > 0) {
+        this.closePosition(position.symbol);
+        closedSymbols.push(position.symbol);
+        this.emit('margin_call', {
+          symbol: position.symbol,
+          marginRatio,
+          threshold: this.marginCallThreshold,
+          action: 'FORCE_CLOSE'
+        });
+      }
+    });
+
+    return { isMarginCall: closedSymbols.length > 0, closedSymbols };
+  }
+
+  /**
+   * Get positions that should be liquidated in margin call (worst first)
+   */
+  getMarginCallLiquidationOrder(): DemoPosition[] {
+    return Array.from(this.positions.values())
+      .sort((a, b) => a.unrealizedPnL - b.unrealizedPnL);
+  }
+
+  /**
+   * Calculate commission for a trade
+   * QA-FIX #6: Removed duplicate calculateCommission that used `isMaker: boolean` parameter.
+   * The original code had two definitions with different signatures. The first (line 796)
+   * accepted `isMaker: boolean` but was called with `order.type` (an OrderType), causing
+   * a type mismatch at runtime. The second (line 1012) correctly used `orderType: OrderType`.
+   * In JS the second definition won, so the first was dead code. Now we have a single
+   * correct method that maps OrderType to maker/taker fee rates.
+   * @param price - Execution price
+   * @param quantity - Trade quantity  
+   * @param orderType - Type of order (LIMIT uses maker fee, others use taker fee)
+   * @returns Commission fee amount
+   */
+  calculateCommission(price: number, quantity: number, orderType: OrderType): number {
+    const notional = price * quantity;
+    const rate = orderType === OrderType.LIMIT
+      ? this.commissionRates.makerFee
+      : this.commissionRates.takerFee;
+    return notional * rate;
+  }
+
+  /**
    * Reset demo account
+   * v4.0.0 - Also resets circuit breaker state
    */
   reset(initialCapital: number = 10000): void {
     if (initialCapital <= 0) {
@@ -641,6 +941,16 @@ export class DemoTrader {
     this.positions.clear();
     this.orders = [];
     this.tradeHistory = [];
+    this.realizedTrades = [];
+
+    // Reset circuit breaker
+    this.consecutiveLosses = 0;
+    this.circuitBreakerState = 'CLOSED';
+    this.circuitBreakerTrippedAt = null;
+    this.circuitBreakerCooldownExpiresAt = null;
+    this.positionSizeMultiplier = 1.0;
+    this.recoveryWins = 0;
+
     this.portfolio = {
       id: 'demo-portfolio',
       name: 'Demo Portfolio',
@@ -688,6 +998,226 @@ export class DemoTrader {
       worstTrade: trades.length > 0 ? Math.min(...trades.map(t => t.pnl || 0)) : 0,
       profitFactor: grossLoss > 0 ? grossProfit / grossLoss : 0
     };
+  }
+
+  // ==================== NEW v3.0.0 METHODS ====================
+
+  // QA-FIX #8: The private updateTrailingStop(position) method is now merged into
+  // the unified updateTrailingStop above. No separate private method needed.
+
+  /**
+   * Set trailing stop loss for a position
+   * @param symbol - Position symbol
+   * @param distance - Distance from current price for the trailing stop
+   * @returns Whether the trailing stop was set successfully
+   */
+  setTrailingStop(symbol: string, distance: number): boolean {
+    const position = this.positions.get(symbol);
+    if (!position || distance <= 0) return false;
+
+    position.trailingStopDistance = distance;
+    position.trailingStop = undefined; // Will be set on next price update
+    position.trailingStopActivated = false;
+
+    this.emit('trailing_stop_set', { symbol, distance });
+    return true;
+  }
+
+  /**
+   * Close a partial position - delegates to the unified closePositionPartial above.
+   * QA-FIX #4: This duplicate definition has been removed. The original had two
+   * closePositionPartial definitions (lines 738 and 925). The second one won due to
+   * JS class semantics, making the first dead code. We keep only the unified version above.
+   */
+
+  /**
+   * Average into a position (add to an existing position at a different price)
+   * @param symbol - Position symbol
+   * @param quantity - Additional quantity to add
+   * @param orderType - Order type (default: MARKET)
+   * @returns The averaging order or null
+   */
+  averagePosition(symbol: string, quantity: number, orderType: OrderType = OrderType.MARKET): DemoOrder | null {
+    const position = this.positions.get(symbol);
+    if (!position) return null;
+
+    const side = position.side === 'LONG' ? TradeAction.BUY : TradeAction.SELL;
+
+    try {
+      const order = this.placeOrder({
+        symbol,
+        side,
+        type: orderType,
+        quantity,
+        leverage: position.leverage,
+        stopLoss: position.stopLoss,
+        takeProfit: position.takeProfit
+      });
+
+      this.emit('position_averaged', { symbol, quantity, avgEntryPrice: position.avgEntryPrice });
+      return order;
+    } catch (error) {
+      console.error('Error averaging position:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Check for margin call - now delegates to the unified checkMarginCall above.
+   * QA-FIX #5: This duplicate definition has been removed. The original had two
+   * checkMarginCall definitions with different return types (boolean vs string[]),
+   * causing a silent type change. Now we have one method returning an object.
+   */
+
+  /**
+   * Calculate commission for an order - now delegates to the unified calculateCommission above.
+   * QA-FIX #6: This duplicate definition has been removed. The original had two
+   * calculateCommission definitions with different parameter types (boolean vs OrderType),
+   * causing incorrect fee calculations when the first definition was expected.
+   */
+
+  /**
+   * Get realized trade PnL history
+   * @returns Array of realized trade PnL records
+   */
+  getRealizedTrades(): RealizedTradePnL[] {
+    return [...this.realizedTrades];
+  }
+
+  /**
+   * Get total fees paid
+   * @returns Total commission fees across all trades
+   */
+  getTotalFees(): number {
+    return this.realizedTrades.reduce((sum, t) => sum + t.fees, 0);
+  }
+
+  /**
+   * Set margin call threshold
+   * @param threshold - New threshold (0-1, where 0.5 = 50%)
+   */
+  setMarginCallThreshold(threshold: number): void {
+    if (threshold <= 0 || threshold > 1) {
+      throw new Error('Margin call threshold must be between 0 and 1');
+    }
+    this.marginCallThreshold = threshold;
+  }
+
+  // ==================== CIRCUIT BREAKER METHODS ====================
+
+  /**
+   * Record the result of a trade for circuit breaker tracking
+   * Increments consecutive losses on losing trades, resets on winning trades
+   * @param pnl - The realized PnL of the closed trade
+   */
+  private recordTradeResult(pnl: number): void {
+    if (pnl < 0) {
+      this.consecutiveLosses++;
+      this.recoveryWins = 0; // Reset recovery wins on a loss
+
+      // Check if we should trip the circuit breaker
+      if (this.consecutiveLosses >= this.circuitBreakerConfig.consecutiveLossThreshold
+          && this.circuitBreakerState === 'CLOSED') {
+        this.tripCircuitBreaker();
+      }
+    } else if (pnl > 0) {
+      this.consecutiveLosses = 0;
+
+      // If in HALF_OPEN state, gradually restore position size
+      if (this.circuitBreakerState === 'HALF_OPEN') {
+        this.recoveryWins++;
+        this.positionSizeMultiplier = Math.min(
+          1.0,
+          this.positionSizeMultiplier + this.circuitBreakerConfig.recoveryStep
+        );
+
+        // If fully recovered, close the breaker
+        if (this.positionSizeMultiplier >= 1.0) {
+          this.circuitBreakerState = 'CLOSED';
+          this.circuitBreakerTrippedAt = null;
+          this.circuitBreakerCooldownExpiresAt = null;
+          this.recoveryWins = 0;
+          this.emit('circuit_breaker_closed', { multiplier: 1.0 });
+        } else {
+          this.emit('circuit_breaker_recovery', {
+            wins: this.recoveryWins,
+            multiplier: this.positionSizeMultiplier
+          });
+        }
+      }
+    }
+  }
+
+  /**
+   * Trip the circuit breaker, halting trading for the cooldown period
+   */
+  private tripCircuitBreaker(): void {
+    this.circuitBreakerState = 'OPEN';
+    this.circuitBreakerTrippedAt = new Date();
+    this.circuitBreakerCooldownExpiresAt = new Date(
+      Date.now() + this.circuitBreakerConfig.cooldownDurationMs
+    );
+    this.positionSizeMultiplier = 0; // No trading while OPEN
+    this.recoveryWins = 0;
+
+    this.emit('circuit_breaker_tripped', {
+      consecutiveLosses: this.consecutiveLosses,
+      cooldownExpiresAt: this.circuitBreakerCooldownExpiresAt,
+      threshold: this.circuitBreakerConfig.consecutiveLossThreshold
+    });
+  }
+
+  /**
+   * Update the circuit breaker state based on current time
+   * Transitions from OPEN to HALF_OPEN when cooldown expires
+   */
+  private updateCircuitBreakerState(): void {
+    if (this.circuitBreakerState === 'OPEN' && this.circuitBreakerCooldownExpiresAt) {
+      if (Date.now() >= this.circuitBreakerCooldownExpiresAt.getTime()) {
+        // Cooldown expired - transition to HALF_OPEN
+        this.circuitBreakerState = 'HALF_OPEN';
+        this.positionSizeMultiplier = this.circuitBreakerConfig.reducedPositionMultiplier;
+        this.recoveryWins = 0;
+
+        this.emit('circuit_breaker_half_open', {
+          multiplier: this.positionSizeMultiplier
+        });
+      }
+    }
+  }
+
+  /**
+   * Get the current circuit breaker status for monitoring
+   * @returns Detailed circuit breaker status object
+   */
+  getCircuitBreakerStatus(): CircuitBreakerStatus {
+    // Update state before reporting
+    this.updateCircuitBreakerState();
+
+    return {
+      state: this.circuitBreakerState,
+      consecutiveLosses: this.consecutiveLosses,
+      totalTradesWhileActive: this.tradeHistory.length,
+      trippedAt: this.circuitBreakerTrippedAt,
+      cooldownExpiresAt: this.circuitBreakerCooldownExpiresAt,
+      positionSizeMultiplier: this.positionSizeMultiplier,
+      threshold: this.circuitBreakerConfig.consecutiveLossThreshold,
+      recoveryWins: this.recoveryWins
+    };
+  }
+
+  /**
+   * Manually reset the circuit breaker to CLOSED state
+   * Useful for testing or admin override
+   */
+  resetCircuitBreaker(): void {
+    this.circuitBreakerState = 'CLOSED';
+    this.circuitBreakerTrippedAt = null;
+    this.circuitBreakerCooldownExpiresAt = null;
+    this.positionSizeMultiplier = 1.0;
+    this.consecutiveLosses = 0;
+    this.recoveryWins = 0;
+    this.emit('circuit_breaker_reset', {});
   }
 }
 

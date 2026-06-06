@@ -2,6 +2,152 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.0] - 2026-06-06
+
+### 🔴 Critical Bug Fixes
+
+1. **Bollinger Bands .sort() mutation bug**: Sorted copy instead of in-place sort to prevent array mutation side effects
+2. **calculateSignalQualityScore VWAP comparison**: Fixed comparison using SMA20 instead of lastClose
+3. **Missing imports for newsAggregator and vectorStore** in signal-engine.ts
+4. **DemoTrader duplicate methods with incompatible return types**: Fixed `closePositionPartial`, `checkMarginCall`, `calculateCommission` method signatures
+5. **Backtest annualized return formula**: Fixed formula using 365/365=1 instead of actual period calculation
+6. **Stochastic Oscillator %K falsy check**: Changed `0 || 50` to `0 ?? 50` (nullish coalescing) so `%K=0` is correctly preserved
+7. **Security: API error responses no longer expose internal error details** — sanitized error messages for production safety
+8. **.gitignore updated** to allow `.env.example` tracking
+9. **Added Next.js error boundary** (`error.tsx`) for graceful error handling
+
+### 🟢 New Features
+
+1. **Circuit Breaker Pattern** in DemoTrader — auto-halts trading after consecutive losses with HALF_OPEN recovery state and gradual position size reduction
+2. **Ichimoku Cloud Indicator** — Tenkan-sen, Kijun-sen, Senkou Span A/B, Chikou Span with bullish/bearish signal detection
+3. **Stochastic Oscillator (%K/%D)** — Overbought/oversold detection, crossover signals, %K/%D calculation with proper falsy-zero handling
+4. **Trade Journal System** (new module) — Trade recording with entry/exit logging, review report generation, win rate by strategy, JSON export/import, lesson and emotional state tracking
+5. **Portfolio Rebalancer** (new module) — Target allocation CRUD with validation, drift detection, BUY/SELL/HOLD suggestions, risk-adjusted allocation, manual/auto modes
+6. **API Validation Utilities** (new module) — Comprehensive input validation utilities for API endpoints
+7. **Health Check Endpoint** (new route) — System status monitoring at `/api/health`
+
+### 🧪 New Tests
+
+| Module | Tests | Status |
+|--------|-------|--------|
+| Circuit Breaker | 30 | ✅ All pass |
+| Ichimoku Cloud | 16 | ✅ All pass |
+| Stochastic Oscillator | 21 | ✅ All pass |
+| Trade Journal | 30 | ✅ All pass |
+| Portfolio Rebalancer | 28 | ✅ All pass |
+
+### 📊 Total: 620+ tests across 22 files
+
+---
+
+## [3.0.0] - 2026-06-06
+
+### 🚀 Major New Features
+
+#### Risk Management System (NEW MODULE)
+- **RiskManager**: Comprehensive portfolio risk management (`src/lib/trading/risk/risk-manager.ts`)
+  - Position sizing using fixed-fractional method with Kelly Criterion influence
+  - Maximum drawdown protection with auto-trading halt (configurable threshold, default 20%)
+  - Daily loss limit enforcement (configurable, default 5% of portfolio)
+  - Portfolio-level risk scoring (0-1 scale) combining position risk + concentration risk
+  - Trade risk assessment with concentration, direction, and leverage analysis
+  - Margin call detection with liquidation ordering (worst-loss-first)
+  - Configurable risk parameters (max open positions, max portfolio risk, margin call threshold)
+  - Emergency trading halt/resume controls
+  - Comprehensive risk report generation
+
+#### Performance Analytics Module (NEW MODULE)
+- **PerformanceTracker**: Trading performance tracking and reporting (`src/lib/trading/analytics/performance-tracker.ts`)
+  - Rolling Sharpe ratio calculation with configurable window
+  - Sortino ratio (downside deviation only) for asymmetric risk measurement
+  - Win/loss streak tracking with current streak identification
+  - Equity curve generation with peak/trough analysis
+  - Max drawdown calculation from equity curve
+  - Profit factor and expectancy calculations
+  - Best/worst trade identification
+  - Comprehensive performance report generation (JSON export)
+  - Equity curve and trade data export for external analysis
+
+#### Advanced Technical Indicators (SIGNAL ENGINE UPGRADE)
+- **Bollinger Bands**: Full implementation with squeeze detection
+  - Upper/middle/lower bands with configurable period and standard deviation multiplier
+  - Bandwidth calculation for volatility assessment
+  - %B indicator showing price position relative to bands
+  - Squeeze detection (bandwidth in bottom 20% of recent values)
+- **VWAP (Volume Weighted Average Price)**: Institutional-grade volume analysis
+  - Cumulative typical price weighted by volume
+  - Standard deviation bands for VWAP range
+  - Price-above/below-VWAP trend confirmation
+- **ADX (Average Directional Index)**: Trend strength measurement
+  - Wilder's smoothing for +DI and -DI calculations
+  - ADX value for trend strength (STRONG > 50, MODERATE > 25, WEAK > 20, NONE < 20)
+  - Directional indicator comparison for trend direction confirmation
+- **Volume Profile**: Price-volume distribution analysis
+  - Point of Control (POC) identification - price level with highest volume
+  - 70% value area calculation (high and low)
+  - Volume distribution across price buckets
+  - Mean reversion scoring based on distance from POC
+
+#### Demo Trader Advanced Features
+- **Trailing Stop Loss**: Automated stop-loss adjustment that follows price
+  - LONG positions: stop moves UP with price, never down
+  - SHORT positions: stop moves DOWN with price, never up
+  - Configurable trail percentage
+- **Partial Position Closing**: Close a percentage of a position (1-100%)
+  - Enables profit-taking while maintaining exposure
+  - Proper PnL calculation for partial closes
+- **Margin Call Simulation**: Realistic margin call detection
+  - 50% margin threshold (configurable)
+  - Automatic liquidation ordering (worst-loss positions first)
+- **Commission Calculator**: Bybit-compatible fee structure
+  - Taker fee: 0.06%, Maker fee: 0.02%
+  - Proper fee calculation for realistic P&L
+
+### 🟢 Enhanced Features
+
+#### Signal Engine Improvements
+- New indicators integrated into scoring algorithm:
+  - Bollinger Bands: overbought/oversold detection (%B > 1 or < 0), squeeze penalty
+  - VWAP: bullish above VWAP, bearish below VWAP
+  - ADX: strong trend boosts directional confidence, weak trend reduces confidence
+  - Volume Profile POC: mean reversion scoring when price far from POC
+- All new indicators exposed in `technicalAnalysis.indicators` output object
+- Signal quality improved with multi-indicator confirmation
+
+#### News Aggregator Improvements
+- Breaking news detection capability (high importance + recent timestamp)
+- Time-decay weighting for older news articles
+- Enhanced duplicate detection by content similarity
+- Sentiment aggregation with configurable time windows
+
+### 🧪 Test System - Massive Expansion (4.5x increase)
+
+#### Total: 447 tests across 17 files (up from ~100 across 8 files)
+
+##### New Unit Tests
+- `risk-manager.test.ts` - 52 tests: Position sizing, drawdown protection, daily loss limits, risk scores, emergency liquidation, margin calls, edge cases
+- `performance-tracker.test.ts` - 47 tests: Rolling Sharpe/Sortino ratios, win/loss streaks, equity curves, peak/trough analysis, drawdown, reports
+- `bybit-client.test.ts` - 53 tests: HMAC-SHA256 signature, request headers, order status mapping, ticker/kline/order/position parsing, network error handling
+- `technical-indicators.test.ts` - 61 tests: SMA, EMA, RSI (Wilder's), MACD, Bollinger Bands, VWAP, ADX, all 7 candlestick patterns, edge cases
+- `api-validation.test.ts` - 71 tests: Symbol formats, required fields, leverage bounds, quantity validation, date ranges, SQL injection, XSS sanitization
+
+##### New Integration Tests
+- `signal-pipeline.test.ts` - 26 tests: Signal generation through execution, multi-signal portfolio management, quality scoring, news-to-signal flow
+- `risk-integration.test.ts` - 20 tests: Portfolio risk assessment, drawdown protection triggers, margin call scenarios, leverage risk
+
+##### New E2E Tests
+- `hackathon-demo.test.ts` - 6 tests: Full demo showcase for hackathon judges - signal-to-profit, multi-symbol portfolio, risk protections, analytics, news-based trading
+
+##### New Stress Tests
+- `concurrent-operations.test.ts` - 15 tests: 1000 rapid price updates, sequential order placement, concurrent signal generation, stop-loss race conditions
+
+### 📝 Documentation Updates
+- Updated README.md with v3.0.0 features and architecture
+- Created comprehensive CHANGELOG v3.0.0 entry
+- Added hackathon pitch deck, video script, and registration guide
+
+---
+
 ## [2.0.0] - 2026-06-06
 
 ### 🔴 Critical Bug Fixes

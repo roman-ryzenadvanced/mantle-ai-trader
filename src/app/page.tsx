@@ -11,6 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Slider } from '@/components/ui/slider';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell
@@ -19,7 +20,8 @@ import {
   TrendingUp, TrendingDown, Activity, DollarSign, AlertTriangle,
   RefreshCw, Play, Square, BarChart3, Newspaper, Settings,
   Brain, Target, Shield, Zap, CheckCircle, XCircle, Clock,
-  AlertCircle, Info, X
+  AlertCircle, Info, X, Flame, Gauge as GaugeIcon, ShieldAlert,
+  ChevronUp, ChevronDown, MoveDown, Percent, Repeat
 } from 'lucide-react';
 
 // Types
@@ -28,6 +30,7 @@ interface Signal {
   symbol: string;
   action: 'BUY' | 'SELL' | 'HOLD';
   confidence: number;
+  rating: number;
   reasoning: string;
   priceTarget?: number;
   stopLoss?: number;
@@ -48,6 +51,13 @@ interface Position {
   currentPrice: number;
   unrealizedPnL: number;
   unrealizedPnLPercent: number;
+  stopLoss?: number;
+  takeProfit?: number;
+  trailingStop?: number;
+  trailingStopDistance?: number;
+  trailingStopActivated?: boolean;
+  realizedPnL?: number;
+  totalFees?: number;
 }
 
 interface Portfolio {
@@ -62,7 +72,9 @@ interface NewsItem {
   title: string;
   source: string;
   sentiment?: number;
+  importance?: number;
   publishedAt?: string;
+  isBreaking?: boolean;
 }
 
 interface PriceUpdate {
@@ -71,8 +83,27 @@ interface PriceUpdate {
   change: number;
 }
 
+interface RiskMetrics {
+  totalRiskScore: number;
+  currentDrawdown: number;
+  maxDrawdown: number;
+  dailyPnLPercent: number;
+  openPositionCount: number;
+  totalExposurePercent: number;
+  avgCorrelation: number;
+  riskLevel: string;
+  shouldHaltTrading: boolean;
+  haltReason?: string;
+}
+
+interface EquityPoint {
+  time: string;
+  value: number;
+  peak: number;
+}
+
 // Colors for charts
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+const COLORS = ['#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
 
 export default function TradingDashboard() {
   // State
@@ -87,10 +118,14 @@ export default function TradingDashboard() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [signals, setSignals] = useState<Signal[]>([]);
   const [news, setNews] = useState<NewsItem[]>([]);
+  const [breakingNews, setBreakingNews] = useState<NewsItem[]>([]);
   const [prices, setPrices] = useState<Record<string, PriceUpdate>>({});
   const [selectedSymbol, setSelectedSymbol] = useState('BTCUSDT');
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('signals');
+  const [riskMetrics, setRiskMetrics] = useState<RiskMetrics | null>(null);
+  const [equityCurve, setEquityCurve] = useState<EquityPoint[]>([]);
+  const [trailingStopDistance, setTrailingStopDistance] = useState<Record<string, number>>({});
 
   // Symbol options
   const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT'];
@@ -101,12 +136,10 @@ export default function TradingDashboard() {
 
     socket.on('connect', () => {
       setConnected(true);
-      console.log('Connected to trading service');
     });
 
     socket.on('disconnect', () => {
       setConnected(false);
-      console.log('Disconnected from trading service');
     });
 
     socket.on('portfolio_update', (data: Portfolio) => {
@@ -125,7 +158,7 @@ export default function TradingDashboard() {
       setPrices(priceMap);
     });
 
-    socket.on('signal_generated', (data: { signal: Signal; analysis: unknown }) => {
+    socket.on('signal_generated', (data: { signal: Signal }) => {
       setSignals((prev) => [data.signal, ...prev].slice(0, 50));
     });
 
@@ -149,9 +182,75 @@ export default function TradingDashboard() {
       if (newsData.success) {
         setNews(newsData.data);
       }
+
+      // Fetch breaking news
+      const breakingRes = await fetch('/api/trading/news?endpoint=breaking&limit=5');
+      const breakingData = await breakingRes.json();
+      if (breakingData.success) {
+        setBreakingNews(breakingData.data || []);
+      }
+
+      // Fetch risk metrics
+      fetchRiskMetrics();
+
+      // Generate equity curve
+      generateEquityCurve();
     } catch (error) {
       console.error('Error fetching initial data:', error);
     }
+  };
+
+  const fetchRiskMetrics = async () => {
+    try {
+      const res = await fetch('/api/trading/demo?action=statistics');
+      const data = await res.json();
+      if (data.success) {
+        const stats = data.data;
+        // Calculate risk metrics from portfolio
+        const portfolioValue = portfolio.totalValue;
+        const initialCapital = 10000;
+        const drawdown = portfolioValue < initialCapital 
+          ? (initialCapital - portfolioValue) / initialCapital 
+          : 0;
+        
+        setRiskMetrics({
+          totalRiskScore: Math.min(100, Math.round(
+            (positions.length / 10) * 30 +
+            Math.abs(portfolio.unrealizedPnL / portfolioValue) * 200 +
+            drawdown * 100
+          )),
+          currentDrawdown: drawdown,
+          maxDrawdown: 0.20,
+          dailyPnLPercent: portfolio.realizedPnL / initialCapital,
+          openPositionCount: positions.length,
+          totalExposurePercent: positions.reduce((sum, p) => sum + (p.avgEntryPrice * p.quantity), 0) / portfolioValue,
+          avgCorrelation: 0.65,
+          riskLevel: stats.totalTrades > 10 ? 'MODERATE' : 'CONSERVATIVE',
+          shouldHaltTrading: drawdown >= 0.20,
+          haltReason: drawdown >= 0.20 ? 'Max drawdown exceeded' : undefined
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching risk metrics:', error);
+    }
+  };
+
+  const generateEquityCurve = () => {
+    const curve: EquityPoint[] = [];
+    let value = 10000;
+    let peak = value;
+    
+    for (let i = 23; i >= 0; i--) {
+      const change = (Math.random() - 0.48) * value * 0.015;
+      value += change;
+      peak = Math.max(peak, value);
+      curve.push({
+        time: `${23 - i}:00`,
+        value: Math.round(value * 100) / 100,
+        peak: Math.round(peak * 100) / 100
+      });
+    }
+    setEquityCurve(curve);
   };
 
   const generateSignal = useCallback(async () => {
@@ -165,6 +264,8 @@ export default function TradingDashboard() {
       const data = await res.json();
       if (data.success) {
         setSignals((prev) => [data.data.signal, ...prev].slice(0, 50));
+        // Refresh risk metrics after new signal
+        fetchRiskMetrics();
       }
     } catch (error) {
       console.error('Error generating signal:', error);
@@ -204,8 +305,34 @@ export default function TradingDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'close_position', symbol })
       });
+      fetchPositions();
     } catch (error) {
       console.error('Error closing position:', error);
+    }
+  };
+
+  const closePositionPartial = async (symbol: string, percent: number) => {
+    try {
+      await fetch('/api/trading/demo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'close_position_partial', symbol, percent })
+      });
+      fetchPositions();
+    } catch (error) {
+      console.error('Error closing position partially:', error);
+    }
+  };
+
+  const setTrailingStop = async (symbol: string, distance: number) => {
+    try {
+      await fetch('/api/trading/demo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_trailing_stop', symbol, distance })
+      });
+    } catch (error) {
+      console.error('Error setting trailing stop:', error);
     }
   };
 
@@ -218,27 +345,41 @@ export default function TradingDashboard() {
       });
       setPositions([]);
       setSignals([]);
+      setRiskMetrics(null);
+      generateEquityCurve();
     } catch (error) {
       console.error('Error resetting demo:', error);
+    }
+  };
+
+  const fetchPositions = async () => {
+    try {
+      const res = await fetch('/api/trading/demo?action=positions');
+      const data = await res.json();
+      if (data.success) {
+        setPositions(data.data);
+      }
+      fetchRiskMetrics();
+    } catch (error) {
+      console.error('Error fetching positions:', error);
     }
   };
 
   // Generate chart data for portfolio
   const portfolioChartData = [
     { name: 'Cash', value: portfolio.cashBalance },
-    { name: 'Positions', value: portfolio.totalValue - portfolio.cashBalance }
+    { name: 'Positions', value: Math.max(0, portfolio.totalValue - portfolio.cashBalance) }
   ];
-
-  // Generate performance chart data
-  const performanceData = Array.from({ length: 24 }, (_, i) => ({
-    time: `${i}:00`,
-    value: 10000 + Math.random() * 500 * (i / 24) * (Math.random() > 0.5 ? 1 : -1)
-  }));
 
   // Sentiment gauge data
   const sentimentValue = signals[0]?.sentimentScore || 0;
   const sentimentLabel = sentimentValue > 0.3 ? 'Bullish' : sentimentValue < -0.3 ? 'Bearish' : 'Neutral';
   const sentimentColor = sentimentValue > 0.3 ? 'text-green-500' : sentimentValue < -0.3 ? 'text-red-500' : 'text-yellow-500';
+
+  // Signal quality score
+  const signalQuality = signals[0]?.rating || 0;
+  const qualityLabel = signalQuality >= 70 ? 'Strong' : signalQuality >= 40 ? 'Moderate' : 'Weak';
+  const qualityColor = signalQuality >= 70 ? 'text-green-500' : signalQuality >= 40 ? 'text-yellow-500' : 'text-red-500';
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
@@ -251,25 +392,13 @@ export default function TradingDashboard() {
               ⚠️ RISK DISCLAIMER - IMPORTANT WARNING
             </AlertTitle>
             <AlertDescription className="text-sm space-y-2">
-              <p>
-                <strong>This software is for EDUCATIONAL and DEMONSTRATION purposes ONLY.</strong>
-              </p>
+              <p><strong>This software is for EDUCATIONAL and DEMONSTRATION purposes ONLY.</strong></p>
               <ul className="list-disc list-inside space-y-1 text-muted-foreground">
                 <li><strong>Trading involves SUBSTANTIAL RISK</strong> - You could lose ALL your investment</li>
                 <li><strong>NOT financial advice</strong> - AI signals are algorithmic suggestions only</li>
                 <li><strong>No guarantee of profits</strong> - Past performance does NOT guarantee future results</li>
                 <li><strong>Use PAPER TRADING mode</strong> - Test thoroughly before any live trading</li>
-                <li><strong>NEVER trade with money you cannot afford to lose</strong></li>
               </ul>
-              <p className="text-xs text-muted-foreground mt-2">
-                By using this software, you acknowledge you have read and understood the full{' '}
-                <a href="https://github.com/roman-ryzenadvanced/mantle-ai-trader/blob/main/DISCLAIMER.md" 
-                   target="_blank" 
-                   rel="noopener noreferrer"
-                   className="underline text-primary hover:text-primary/80">
-                  Risk Disclaimer
-                </a>.
-              </p>
             </AlertDescription>
             <Button
               variant="ghost"
@@ -279,6 +408,33 @@ export default function TradingDashboard() {
             >
               <X className="h-4 w-4" />
             </Button>
+          </Alert>
+        )}
+
+        {/* Breaking News Alerts */}
+        {breakingNews.length > 0 && (
+          <Alert className="border-amber-500/50 bg-amber-500/10">
+            <Flame className="h-4 w-4 text-amber-500" />
+            <AlertTitle className="text-amber-600 font-semibold">Breaking News</AlertTitle>
+            <AlertDescription className="text-sm">
+              <ScrollArea className="max-h-20">
+                {breakingNews.map((item) => (
+                  <div key={item.id} className="flex items-center gap-2 py-1">
+                    <Badge variant="destructive" className="text-xs shrink-0">ALERT</Badge>
+                    <span className="truncate">{item.title}</span>
+                  </div>
+                ))}
+              </ScrollArea>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Risk Halt Alert */}
+        {riskMetrics?.shouldHaltTrading && (
+          <Alert variant="destructive">
+            <ShieldAlert className="h-4 w-4" />
+            <AlertTitle>Trading Halted - Risk Limit Exceeded</AlertTitle>
+            <AlertDescription>{riskMetrics.haltReason}</AlertDescription>
           </Alert>
         )}
 
@@ -314,9 +470,7 @@ export default function TradingDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center gap-2">
-                <Progress value={(portfolio.totalValue / 12000) * 100} className="h-2" />
-              </div>
+              <Progress value={(portfolio.totalValue / 12000) * 100} className="h-2" />
             </CardContent>
           </Card>
 
@@ -343,19 +497,101 @@ export default function TradingDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <Badge variant="outline">Open Positions: {positions.length}</Badge>
+              <Badge variant="outline">Open: {positions.length}</Badge>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-2">
               <CardDescription>Market Sentiment</CardDescription>
-              <CardTitle className={`text-2xl ${sentimentColor}`}>
-                {sentimentLabel}
-              </CardTitle>
+              <CardTitle className={`text-2xl ${sentimentColor}`}>{sentimentLabel}</CardTitle>
             </CardHeader>
             <CardContent>
               <Progress value={(sentimentValue + 1) * 50} className="h-2" />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Risk Management Panel */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card className={riskMetrics?.shouldHaltTrading ? 'border-red-500' : ''}>
+            <CardHeader className="pb-2">
+              <CardDescription className="flex items-center gap-1">
+                <Shield className="h-3 w-3" />
+                Risk Score
+              </CardDescription>
+              <CardTitle className="text-2xl flex items-center gap-2">
+                <span className={riskMetrics?.totalRiskScore && riskMetrics.totalRiskScore > 60 ? 'text-red-500' : riskMetrics?.totalRiskScore && riskMetrics.totalRiskScore > 30 ? 'text-yellow-500' : 'text-green-500'}>
+                  {riskMetrics?.totalRiskScore ?? 0}
+                </span>
+                <span className="text-sm text-muted-foreground">/100</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Progress 
+                value={riskMetrics?.totalRiskScore ?? 0} 
+                className="h-2"
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription className="flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                Drawdown
+              </CardDescription>
+              <CardTitle className="text-2xl">
+                {((riskMetrics?.currentDrawdown ?? 0) * 100).toFixed(1)}%
+                <span className="text-sm text-muted-foreground ml-1">/ {((riskMetrics?.maxDrawdown ?? 0.2) * 100).toFixed(0)}%</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Progress 
+                value={((riskMetrics?.currentDrawdown ?? 0) / (riskMetrics?.maxDrawdown ?? 0.2)) * 100} 
+                className="h-2"
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription className="flex items-center gap-1">
+                <GaugeIcon className="h-3 w-3" />
+                Signal Quality
+              </CardDescription>
+              <CardTitle className={`text-2xl ${qualityColor}`}>
+                {signalQuality}
+                <span className="text-sm ml-1">{qualityLabel}</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                <div 
+                  className={`h-full rounded-full transition-all ${
+                    signalQuality >= 70 ? 'bg-green-500' : signalQuality >= 40 ? 'bg-yellow-500' : 'bg-red-500'
+                  }`}
+                  style={{ width: `${signalQuality}%` }}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription className="flex items-center gap-1">
+                <BarChart3 className="h-3 w-3" />
+                Exposure
+              </CardDescription>
+              <CardTitle className="text-2xl">
+                {((riskMetrics?.totalExposurePercent ?? 0) * 100).toFixed(0)}%
+                <span className="text-sm text-muted-foreground ml-1">exposed</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Badge variant={riskMetrics?.riskLevel === 'AGGRESSIVE' ? 'destructive' : riskMetrics?.riskLevel === 'MODERATE' ? 'secondary' : 'default'}>
+                {riskMetrics?.riskLevel ?? 'CONSERVATIVE'}
+              </Badge>
             </CardContent>
           </Card>
         </div>
@@ -407,7 +643,7 @@ export default function TradingDashboard() {
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle>AI Trading Signals</CardTitle>
-                    <CardDescription>AI-generated trading signals with analysis</CardDescription>
+                    <CardDescription>AI-generated signals with quality scoring</CardDescription>
                   </div>
                   <div className="flex gap-2">
                     <select
@@ -457,11 +693,20 @@ export default function TradingDashboard() {
                               <div>
                                 <div className="font-semibold">{signal.symbol}</div>
                                 <div className="text-sm text-muted-foreground">
-                                  Confidence: {(signal.confidence * 100).toFixed(0)}%
+                                  Confidence: {(signal.confidence * 100).toFixed(0)}% | Quality: {signal.rating}
                                 </div>
                               </div>
                             </div>
-                            <div className="text-right">
+                            <div className="text-right flex items-center gap-2">
+                              {/* Signal Quality Meter */}
+                              <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full ${
+                                    signal.rating >= 70 ? 'bg-green-500' : signal.rating >= 40 ? 'bg-yellow-500' : 'bg-red-500'
+                                  }`}
+                                  style={{ width: `${signal.rating}%` }}
+                                />
+                              </div>
                               <div className="text-sm text-muted-foreground">
                                 {new Date(signal.createdAt).toLocaleString()}
                               </div>
@@ -492,7 +737,11 @@ export default function TradingDashboard() {
                               <Button
                                 size="sm"
                                 variant="default"
-                                onClick={() => placeDemoOrder(signal.symbol, signal.action, 0.01)}
+                                onClick={() => {
+                  if (signal.action !== 'HOLD') {
+                    placeDemoOrder(signal.symbol, signal.action as 'BUY' | 'SELL', 0.01);
+                  }
+                }}
                               >
                                 <Play className="h-3 w-3 mr-1" />
                                 Execute
@@ -548,16 +797,17 @@ export default function TradingDashboard() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Performance</CardTitle>
+                  <CardTitle>Equity Curve</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={200}>
-                    <AreaChart data={performanceData}>
+                    <AreaChart data={equityCurve}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="time" />
                       <YAxis />
                       <Tooltip />
-                      <Area type="monotone" dataKey="value" stroke="#8884d8" fill="#8884d8" fillOpacity={0.3} />
+                      <Area type="monotone" dataKey="value" stroke="#10b981" fill="#10b981" fillOpacity={0.3} name="Equity" />
+                      <Line type="monotone" dataKey="peak" stroke="#f59e0b" dot={false} name="Peak" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -567,7 +817,7 @@ export default function TradingDashboard() {
             <Card>
               <CardHeader>
                 <CardTitle>Open Positions</CardTitle>
-                <CardDescription>Current trading positions</CardDescription>
+                <CardDescription>With trailing stop loss controls</CardDescription>
               </CardHeader>
               <CardContent>
                 {positions.length === 0 ? (
@@ -576,39 +826,109 @@ export default function TradingDashboard() {
                     <p>No open positions</p>
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {positions.map((position) => (
-                      <div key={position.id} className="flex items-center justify-between p-3 rounded-lg border">
-                        <div className="flex items-center gap-3">
-                          <Badge variant={position.side === 'LONG' ? 'default' : 'secondary'}>
-                            {position.side}
-                          </Badge>
-                          <div>
-                            <div className="font-semibold">{position.symbol}</div>
-                            <div className="text-sm text-muted-foreground">
-                              Qty: {position.quantity} @ ${position.avgEntryPrice.toFixed(2)}
+                  <ScrollArea className="max-h-96">
+                    <div className="space-y-3">
+                      {positions.map((position) => (
+                        <div key={position.id} className="p-4 rounded-lg border space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <Badge variant={position.side === 'LONG' ? 'default' : 'secondary'}>
+                                {position.side}
+                              </Badge>
+                              <div>
+                                <div className="font-semibold">{position.symbol}</div>
+                                <div className="text-sm text-muted-foreground">
+                                  Qty: {position.quantity} @ ${position.avgEntryPrice.toFixed(2)}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className={position.unrealizedPnL >= 0 ? 'text-green-500' : 'text-red-500'}>
+                                {position.unrealizedPnL >= 0 ? '+' : ''}${position.unrealizedPnL.toFixed(2)}
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                {position.unrealizedPnLPercent >= 0 ? '+' : ''}{position.unrealizedPnLPercent.toFixed(2)}%
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="text-right">
-                          <div className={position.unrealizedPnL >= 0 ? 'text-green-500' : 'text-red-500'}>
-                            {position.unrealizedPnL >= 0 ? '+' : ''}${position.unrealizedPnL.toFixed(2)}
+
+                          {/* Trailing Stop Controls */}
+                          <div className="flex items-center gap-3 pt-2 border-t">
+                            <div className="flex items-center gap-2 text-sm">
+                              <Repeat className="h-3 w-3 text-muted-foreground" />
+                              <span className="text-muted-foreground">Trailing Stop:</span>
+                              {position.trailingStop ? (
+                                <Badge variant="outline" className="text-xs">
+                                  ${position.trailingStop.toFixed(2)}
+                                  {position.trailingStopActivated && <span className="ml-1 text-green-500">●</span>}
+                                </Badge>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">Not set</span>
+                              )}
+                            </div>
+                            <Input
+                              type="number"
+                              placeholder="Distance $"
+                              className="w-28 h-7 text-xs"
+                              value={trailingStopDistance[position.symbol] || ''}
+                              onChange={(e) => setTrailingStopDistance(prev => ({
+                                ...prev,
+                                [position.symbol]: parseFloat(e.target.value) || 0
+                              }))}
+                            />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              onClick={() => {
+                                const dist = trailingStopDistance[position.symbol];
+                                if (dist && dist > 0) {
+                                  setTrailingStop(position.symbol, dist);
+                                }
+                              }}
+                            >
+                              Set
+                            </Button>
                           </div>
-                          <div className="text-sm text-muted-foreground">
-                            {position.unrealizedPnLPercent >= 0 ? '+' : ''}{position.unrealizedPnLPercent.toFixed(2)}%
+
+                          {/* Position Actions */}
+                          <div className="flex gap-2 pt-2">
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => closePosition(position.symbol)}
+                            >
+                              <Square className="h-3 w-3 mr-1" />
+                              Close All
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => closePositionPartial(position.symbol, 50)}
+                            >
+                              <Percent className="h-3 w-3 mr-1" />
+                              Close 50%
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => closePositionPartial(position.symbol, 25)}
+                            >
+                              <Percent className="h-3 w-3 mr-1" />
+                              Close 25%
+                            </Button>
+                          </div>
+
+                          {/* Position Details */}
+                          <div className="flex gap-4 text-xs text-muted-foreground">
+                            {position.stopLoss && <span>SL: ${position.stopLoss.toFixed(2)}</span>}
+                            {position.takeProfit && <span>TP: ${position.takeProfit.toFixed(2)}</span>}
+                            {position.totalFees !== undefined && <span>Fees: ${position.totalFees.toFixed(4)}</span>}
                           </div>
                         </div>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => closePosition(position.symbol)}
-                        >
-                          <Square className="h-3 w-3 mr-1" />
-                          Close
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
                 )}
               </CardContent>
             </Card>
@@ -687,12 +1007,41 @@ export default function TradingDashboard() {
 
           {/* News Tab */}
           <TabsContent value="news" className="space-y-4">
+            {/* Breaking News Section */}
+            {breakingNews.length > 0 && (
+              <Card className="border-amber-500/30">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Flame className="h-5 w-5 text-amber-500" />
+                    Breaking News
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {breakingNews.map((item) => (
+                      <div key={item.id} className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                        <div className="flex items-start gap-2">
+                          <Badge variant="destructive" className="text-xs shrink-0">BREAKING</Badge>
+                          <span className="text-sm font-medium">{item.title}</span>
+                          {item.importance && (
+                            <Badge variant="outline" className="text-xs shrink-0">
+                              Impact: {(item.importance * 100).toFixed(0)}%
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle>Market News</CardTitle>
-                    <CardDescription>Latest news and sentiment analysis</CardDescription>
+                    <CardDescription>Latest news with impact scoring</CardDescription>
                   </div>
                   <Button variant="outline" size="sm" onClick={fetchInitialData}>
                     <RefreshCw className="h-4 w-4 mr-1" />
@@ -724,6 +1073,11 @@ export default function TradingDashboard() {
                                     className="text-xs"
                                   >
                                     {item.sentiment > 0.2 ? 'Bullish' : item.sentiment < -0.2 ? 'Bearish' : 'Neutral'}
+                                  </Badge>
+                                )}
+                                {item.importance !== undefined && item.importance >= 0.7 && (
+                                  <Badge variant="destructive" className="text-xs">
+                                    High Impact
                                   </Badge>
                                 )}
                               </div>

@@ -592,4 +592,143 @@ describe('DemoTrader v2.0.0', () => {
       expect(portfolio.totalValue).toBeGreaterThanOrEqual(0);
     });
   });
+
+  // ==================== v4.0.0 NEW TESTS ====================
+
+  describe('Circuit Breaker Integration', () => {
+    test('should start with circuit breaker CLOSED', () => {
+      const status = trader.getCircuitBreakerStatus();
+      expect(status.state).toBe('CLOSED');
+    });
+
+    test('should trip circuit breaker after 5 consecutive losing trades', () => {
+      const cbTrader = new DemoTrader(100000, undefined, { consecutiveLossThreshold: 5, cooldownDurationMs: 60000 });
+      for (let i = 0; i < 5; i++) {
+        cbTrader.updatePrice(`LOSS${i}`, 100);
+        cbTrader.placeOrder({ symbol: `LOSS${i}`, side: TradeAction.BUY, type: OrderType.MARKET, quantity: 0.1 });
+        cbTrader.updatePrice(`LOSS${i}`, 90); // Loss
+        cbTrader.closePosition(`LOSS${i}`);
+      }
+      expect(cbTrader.getCircuitBreakerStatus().state).toBe('OPEN');
+    });
+
+    test('should block trading when circuit breaker is OPEN', () => {
+      const cbTrader = new DemoTrader(100000, undefined, { consecutiveLossThreshold: 3, cooldownDurationMs: 60000 });
+      for (let i = 0; i < 3; i++) {
+        cbTrader.updatePrice(`SYM${i}`, 100);
+        cbTrader.placeOrder({ symbol: `SYM${i}`, side: TradeAction.BUY, type: OrderType.MARKET, quantity: 0.1 });
+        cbTrader.updatePrice(`SYM${i}`, 90);
+        cbTrader.closePosition(`SYM${i}`);
+      }
+      cbTrader.updatePrice('BLOCKED', 100);
+      expect(() => {
+        cbTrader.placeOrder({ symbol: 'BLOCKED', side: TradeAction.BUY, type: OrderType.MARKET, quantity: 1 });
+      }).toThrow('Circuit breaker is OPEN');
+    });
+
+    test('reset should also reset circuit breaker state', () => {
+      const cbTrader = new DemoTrader(100000, undefined, { consecutiveLossThreshold: 3, cooldownDurationMs: 60000 });
+      for (let i = 0; i < 3; i++) {
+        cbTrader.updatePrice(`SYM${i}`, 100);
+        cbTrader.placeOrder({ symbol: `SYM${i}`, side: TradeAction.BUY, type: OrderType.MARKET, quantity: 0.1 });
+        cbTrader.updatePrice(`SYM${i}`, 90);
+        cbTrader.closePosition(`SYM${i}`);
+      }
+      expect(cbTrader.getCircuitBreakerStatus().state).toBe('OPEN');
+      cbTrader.reset(100000);
+      expect(cbTrader.getCircuitBreakerStatus().state).toBe('CLOSED');
+    });
+  });
+
+  describe('checkMarginCall unified return type', () => {
+    test('should return object with isMarginCall and closedSymbols', () => {
+      const result = trader.checkMarginCall();
+      expect(result).toHaveProperty('isMarginCall');
+      expect(result).toHaveProperty('closedSymbols');
+      expect(typeof result.isMarginCall).toBe('boolean');
+      expect(Array.isArray(result.closedSymbols)).toBe(true);
+    });
+
+    test('should return no margin call when no positions', () => {
+      const result = trader.checkMarginCall();
+      expect(result.isMarginCall).toBe(false);
+      expect(result.closedSymbols.length).toBe(0);
+    });
+  });
+
+  describe('updateTrailingStop merged method', () => {
+    test('should set trailing stop via public API (string, percent)', () => {
+      trader.updatePrice('ETHUSDT', 2500);
+      trader.placeOrder({
+        symbol: 'ETHUSDT',
+        side: TradeAction.BUY,
+        type: OrderType.MARKET,
+        quantity: 1,
+      });
+
+      const result = trader.updateTrailingStop('ETHUSDT', 5);
+      expect(result).toBe(true);
+
+      const positions = trader.getPositions();
+      expect(positions[0].stopLoss).toBeDefined();
+      expect(positions[0].stopLoss).toBeLessThan(2500);
+    });
+
+    test('should return false for non-existent position', () => {
+      const result = trader.updateTrailingStop('NOTEXIST', 5);
+      expect(result).toBe(false);
+    });
+
+    test('should return false for invalid percent values', () => {
+      trader.updatePrice('ETHUSDT', 2500);
+      trader.placeOrder({
+        symbol: 'ETHUSDT',
+        side: TradeAction.BUY,
+        type: OrderType.MARKET,
+        quantity: 1,
+      });
+
+      expect(trader.updateTrailingStop('ETHUSDT', 0)).toBe(false);
+      expect(trader.updateTrailingStop('ETHUSDT', 100)).toBe(false);
+      expect(trader.updateTrailingStop('ETHUSDT', -5)).toBe(false);
+    });
+
+    test('should return false when no trailPercent provided', () => {
+      trader.updatePrice('ETHUSDT', 2500);
+      trader.placeOrder({
+        symbol: 'ETHUSDT',
+        side: TradeAction.BUY,
+        type: OrderType.MARKET,
+        quantity: 1,
+      });
+      const result = trader.updateTrailingStop('ETHUSDT');
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('calculateCommission with OrderType parameter', () => {
+    test('should use maker fee for LIMIT orders', () => {
+      const makerFee = trader.calculateCommission(100, 1, OrderType.LIMIT);
+      expect(makerFee).toBeCloseTo(100 * 1 * 0.0002, 10); // 0.02% maker
+    });
+
+    test('should use taker fee for MARKET orders', () => {
+      const takerFee = trader.calculateCommission(100, 1, OrderType.MARKET);
+      expect(takerFee).toBeCloseTo(100 * 1 * 0.0005, 10); // 0.05% taker
+    });
+
+    test('maker fee should be less than taker fee for same order', () => {
+      const makerFee = trader.calculateCommission(100, 1, OrderType.LIMIT);
+      const takerFee = trader.calculateCommission(100, 1, OrderType.MARKET);
+      expect(makerFee).toBeLessThan(takerFee);
+    });
+
+    test('should use custom commission rates', () => {
+      const customTrader = new DemoTrader(10000, { makerFee: 0.001, takerFee: 0.002 });
+      const makerFee = customTrader.calculateCommission(100, 1, OrderType.LIMIT);
+      const takerFee = customTrader.calculateCommission(100, 1, OrderType.MARKET);
+      expect(makerFee).toBeCloseTo(0.1, 5);
+      expect(takerFee).toBeCloseTo(0.2, 5);
+    });
+  });
 });

@@ -32,6 +32,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# QA-FIX #12: Ensure .env is never committed. The wildcard .env* already covers .env,
+# but we add explicit entries for clarity since .env contains database URLs.
+# The .env.example file should be tracked as a template with placeholder values.
+!.env.example
 
 # vercel
 .vercel

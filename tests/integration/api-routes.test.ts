@@ -4,7 +4,7 @@
  */
 
 import { describe, test, expect, beforeAll } from 'bun:test';
-import { TimeFrame, TradeAction, OrderType } from '../../src/lib/trading/core/types';
+import { TimeFrame, TradeAction, OrderType, OrderStatus } from '../../src/lib/trading/core/types';
 
 describe('API Integration Tests', () => {
   const baseUrl = 'http://localhost:3000/api/trading';

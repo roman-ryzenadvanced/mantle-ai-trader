@@ -80,6 +80,21 @@ export class VectorStore {
   }
 
   /**
+   * Check if the vector store is healthy
+   * Attempts a heartbeat query to verify ChromaDB is responsive
+   * @returns true if healthy, false otherwise
+   */
+  async isHealthy(): Promise<boolean> {
+    if (!this.client || !this.connected) return false;
+    try {
+      await this.client.heartbeat();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Generate simple embedding (fallback when no embedding model)
    * This creates a deterministic embedding based on text content
    */
