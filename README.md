@@ -1,9 +1,27 @@
 # Mantle AI Trader
 
 <div align="center">
-  <img src="public/logo.svg" alt="Mantle AI Trader" width="200" />
+  
+  <!-- Main Banner -->
+  <img src="https://img.shields.io/badge/Mantle%20AI%20Trader-🤖%20Trading%20Bot-blue?style=for-the-badge&logo=robot&logoColor=white&labelColor=1a1a2e&color=16213e" alt="Mantle AI Trader Banner" />
+  
   <h3>AI-Powered Fundamental News-Based Trading Bot</h3>
-  <p>Built for Mantle Turing Test Hackathon</p>
+  
+  <!-- Badges -->
+  <p>
+    <img src="https://img.shields.io/badge/Status-Active-success?style=flat-square" alt="Status" />
+    <img src="https://img.shields.io/badge/Platform-Next.js%2016-black?style=flat-square&logo=next.js" alt="Platform" />
+    <img src="https://img.shields.io/badge/AI-z--ai--web--dev--sdk-purple?style=flat-square" alt="AI SDK" />
+    <img src="https://img.shields.io/badge/Exchange-Bybit-orange?style=flat-square" alt="Exchange" />
+  </p>
+  
+  <p><em>Built for Mantle Turing Test Hackathon</em></p>
+  
+  <!-- Made by Badge -->
+  <a href="https://rommark.dev" target="_blank">
+    <img src="https://img.shields.io/badge/Made%20by-Rommark.Dev-ff6b6b?style=for-the-badge&logo=codeforces&logoColor=white&labelColor=2d3436" alt="Made by Rommark.Dev" />
+  </a>
+  
 </div>
 
 ## 🚀 Features
@@ -253,5 +271,19 @@ This project is built for the Mantle Turing Test Hackathon:
 ---
 
 <div align="center">
-  <p>Built with ❤️ for Mantle Turing Test Hackathon</p>
+  
+  <!-- Made by Rommark.Dev Banner -->
+  <a href="https://rommark.dev" target="_blank">
+    <img src="https://img.shields.io/badge/____________Made%20with%20❤️%20by%20Rommark.Dev____________-ff6b6b?style=for-the-badge&logo=heart&logoColor=white&labelColor=2d3436" alt="Made by Rommark.Dev" />
+  </a>
+  
+  <p><em>for Mantle Turing Test Hackathon</em></p>
+  
+  <!-- Links -->
+  <p>
+    <a href="https://rommark.dev">🌐 Website</a> •
+    <a href="https://github.rommark.dev/admin/mantle-ai-trader">📦 Repository</a> •
+    <a href="https://t.me/MantleTuringTestHackathon">💬 Telegram</a>
+  </p>
+  
 </div>
