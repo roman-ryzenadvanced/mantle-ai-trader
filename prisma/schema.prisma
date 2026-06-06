@@ -215,6 +215,21 @@ model UserSettings {
   updatedAt       DateTime  @updatedAt
 }
 
+// Exchange API Accounts (for live trading)
+model ExchangeAccount {
+  id          String    @id @default(uuid())
+  name        String    @default("Bybit Main")
+  exchange    String    @default("bybit") // bybit | binance (future)
+  apiKey      String
+  apiSecret   String
+  testnet     Boolean   @default(true)
+  isActive    Boolean   @default(false)
+  lastTested  DateTime?
+  lastError   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
 // Signal Rating History
 model SignalRating {
   id              String    @id @default(uuid())

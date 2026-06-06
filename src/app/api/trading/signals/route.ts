@@ -131,6 +131,7 @@ export async function POST(request: NextRequest) {
         signal: savedSignal,
         analysis: signalOutput.analysis,
         riskAssessment: signalOutput.riskAssessment,
+        signalDetails: signalOutput.signalDetails,
         qualityScore
       }
     });

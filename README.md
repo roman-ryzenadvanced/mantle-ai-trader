@@ -119,6 +119,15 @@
 - **Portfolio Tracking**: P&L monitoring
 - **Position Management**: Stop-loss/Take-profit
 
+### 🔄 Demo/Live Trading with Exchange Platforms (NEW v3.2.0)
+- **Multi-Exchange Support**: Add Bybit accounts with API keys
+- **Demo/Live Mode Toggle**: One-click switch between paper and live trading
+- **Live Order Execution**: Place market/limit orders on real exchanges
+- **Live Position Tracking**: Real-time sync of exchange positions
+- **Connection Testing**: Verify API keys before going live
+- **Testnet Support**: Safe testing with exchange testnets
+- **MT5-Style Trade Terminal**: Professional open trades table with P&L, close %, totals
+
 ### 📓 Trade Journal (NEW v3.1.0)
 - **Trade Recording**: Log entries with entry/exit, PnL, and emotional state
 - **Review Reports**: Comprehensive trade review with win/loss analysis
@@ -446,6 +455,7 @@ bun test tests/e2e/
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v3.2.0** | 2026-06-06 | Exchange Platform Management, Demo/Live Mode Toggle, Professional Trade Order Panel, MT5 Trade Terminal, News Sentiment Indicators, Live Scan Feed, Active Scanning with 5 Strategies |
 | **v3.1.0** | 2026-06-06 | Circuit Breaker, Ichimoku Cloud, Stochastic Oscillator, Trade Journal, Portfolio Rebalancer, Health Check API, 620+ tests |
 | **v3.0.0** | 2026-06-06 | Risk Management, Performance Analytics, Bollinger Bands, VWAP, ADX, Volume Profile, 447 tests |
 | **v2.0.0** | 2026-06-06 | 8 critical bug fixes, sentiment/MACD/RSI fixes, comprehensive test suite |
@@ -508,6 +518,9 @@ This project is built for the **Mantle Turing Test Hackathon**:
 - **🔬 Battle-Tested**: 620+ tests across 22 files with 9 critical bug fixes documented — we found and fixed bugs that would have caused real financial losses
 - **📊 12+ Technical Indicators**: RSI, MACD, Bollinger Bands, VWAP, ADX, Volume Profile, Ichimoku Cloud, Stochastic Oscillator, and more
 - **📰 Multi-Source News Sentiment**: Aggregated from CryptoPanic, CoinGecko, and CryptoCompare with real-time scoring
+- **🔄 Demo/Live Trading**: One-click mode switch with exchange API key management, live order execution, and MT5-style trade terminal
+- **🎯 Professional Order Panel**: Risk % sizing, leverage control, TP level selector, order summary with R:R ratio
+- **📡 Active Scanning**: 5 strategies (Balanced, Momentum, Breakout, Mean Reversion, VWAP/TWAP) with news-based signals and live feed
 
 ### Technical Highlights
 - **TypeScript 5** with strict mode (`noImplicitAny: true`)

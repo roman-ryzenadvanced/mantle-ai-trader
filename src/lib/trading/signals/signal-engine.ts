@@ -16,6 +16,7 @@ import {
   SignalGenerationInput,
   SignalGenerationOutput,
   SignalAnalysis,
+  SignalDetails,
   TechnicalAnalysis,
   FundamentalAnalysis,
   SentimentAnalysis,
@@ -26,7 +27,11 @@ import {
   SignalStatus,
   TimeFrame,
   MarketDataPoint,
-  NewsArticle
+  NewsArticle,
+  StrategyType,
+  StrategyWeights,
+  ActiveScanResult,
+  NewsSignal,
 } from '../core/types';
 // QA-FIX #3: Import newsAggregator and vectorStore singletons used in performSentimentAnalysis
 import { newsAggregator } from '../news/news-aggregator';
@@ -867,7 +872,8 @@ export class SignalEngine {
     const overallScore = this.calculateOverallScore(
       technicalAnalysis,
       fundamentalAnalysis,
-      sentimentAnalysis
+      sentimentAnalysis,
+      input.strategyName
     );
     
     // Determine action
@@ -875,7 +881,8 @@ export class SignalEngine {
       technicalAnalysis,
       fundamentalAnalysis,
       sentimentAnalysis,
-      overallScore
+      overallScore,
+      input.strategyName
     );
     
     // Generate reasoning using AI
@@ -955,11 +962,583 @@ export class SignalEngine {
         riskAssessment
       )
     };
+
+    // Build professional signal details
+    const signalDetails = this.buildSignalDetails(
+      input.symbol,
+      action,
+      currentPrice,
+      technicalAnalysis,
+      fundamentalAnalysis,
+      sentimentAnalysis,
+      riskAssessment,
+      input.timeframe,
+      input.newsArticles
+    );
     
     return {
       signal,
       analysis,
-      riskAssessment
+      riskAssessment,
+      signalDetails
+    };
+  }
+
+  // ==================== STRATEGY CONFIGURATION ====================
+
+  private static readonly STRATEGY_WEIGHTS: Record<string, StrategyWeights> = {
+    [StrategyType.DEFAULT]: {
+      technical: 0.50, fundamental: 0.25, sentiment: 0.25,
+      label: 'Balanced', description: 'Equal weight across all factors'
+    },
+    [StrategyType.MOMENTUM]: {
+      technical: 0.65, fundamental: 0.10, sentiment: 0.25,
+      label: 'Momentum', description: 'Follows RSI trend + MACD momentum + volume surge'
+    },
+    [StrategyType.BREAKOUT]: {
+      technical: 0.70, fundamental: 0.15, sentiment: 0.15,
+      label: 'Breakout', description: 'Bollinger squeeze + ADX strength + resistance proximity'
+    },
+    [StrategyType.MEAN_REVERSION]: {
+      technical: 0.55, fundamental: 0.10, sentiment: 0.35,
+      label: 'Mean Reversion', description: 'RSI extreme + Bollinger band bounce + S/R proximity'
+    },
+    [StrategyType.VWAP_TWAP]: {
+      technical: 0.60, fundamental: 0.20, sentiment: 0.20,
+      label: 'VWAP/TWAP', description: 'Price vs VWAP spread + volume profile analysis'
+    },
+  };
+
+  private getStrategyWeights(strategy?: StrategyType): StrategyWeights {
+    if (strategy && SignalEngine.STRATEGY_WEIGHTS[strategy]) {
+      return SignalEngine.STRATEGY_WEIGHTS[strategy];
+    }
+    return SignalEngine.STRATEGY_WEIGHTS[StrategyType.DEFAULT];
+  }
+
+  /**
+   * Generate signal with a specific strategy
+   * Reuses technical analysis, applies strategy-specific scoring
+   */
+  async generateSignalWithStrategy(
+    input: SignalGenerationInput,
+    strategy: StrategyType = StrategyType.DEFAULT
+  ): Promise<ActiveScanResult> {
+    const baseOutput = await this.generateSignal({ ...input, strategyName: strategy });
+    return {
+      ...baseOutput,
+      strategyName: strategy,
+      signalType: 'TECHNICAL' as const,
+      scannedAt: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Multi-pair scan: run all strategies across multiple symbols in parallel
+   */
+  async scanPairs(
+    symbols: string[],
+    strategies: StrategyType[],
+    timeframe: TimeFrame,
+    newsArticles: NewsArticle[]
+  ): Promise<ActiveScanResult[]> {
+    const allResults: ActiveScanResult[] = [];
+
+    // Generate market data for all symbols first
+    const marketDataMap = new Map<string, MarketDataPoint[]>();
+    for (const symbol of symbols) {
+      marketDataMap.set(symbol, this.generateDemoMarketData(symbol, 200));
+    }
+
+    // Run all strategy+symbol combos in parallel (batched to avoid overload)
+    const combos: Array<{ symbol: string; strategy: StrategyType }> = [];
+    for (const symbol of symbols) {
+      for (const strategy of strategies) {
+        combos.push({ symbol, strategy });
+      }
+    }
+
+    // Process in batches of 5
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < combos.length; i += BATCH_SIZE) {
+      const batch = combos.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map(({ symbol, strategy }) =>
+          this.generateSignalWithStrategy(
+            {
+              symbol,
+              timeframe,
+              marketData: marketDataMap.get(symbol) || [],
+              newsArticles,
+            },
+            strategy
+          )
+        )
+      );
+
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          allResults.push(result.value);
+        }
+      }
+    }
+
+    // Sort by confidence descending, only keep non-HOLD signals
+    return allResults
+      .filter(r => r.signal.action !== TradeAction.HOLD)
+      .sort((a, b) => b.signal.confidence - a.signal.confidence);
+  }
+
+  /**
+   * Generate news-based signals from breaking/high-impact articles
+   */
+  async generateNewsSignals(
+    symbols: string[],
+    newsArticles: NewsArticle[]
+  ): Promise<NewsSignal[]> {
+    const signals: NewsSignal[] = [];
+    const recentCutoff = Date.now() - 6 * 60 * 60 * 1000; // last 6 hours
+    const recentNews = newsArticles.filter(a => {
+      const pubDate = a.publishedAt ? new Date(a.publishedAt).getTime() : a.fetchedAt.getTime();
+      return pubDate >= recentCutoff && (a.importance || 0.5) >= 0.5;
+    });
+
+    if (recentNews.length === 0) return signals;
+
+    // Compute aggregate sentiment per symbol from recent news
+    const symbolSentiment = new Map<string, { total: number; count: number; highImpact: number; keywords: string[] }>();
+
+    for (const symbol of symbols) {
+      const tag = symbol.replace('USDT', '').replace('USD', '');
+      let total = 0;
+      let count = 0;
+      let highImpact = 0;
+      const keywords: string[] = [];
+
+      for (const article of recentNews) {
+        const titleLower = (article.title || '').toLowerCase();
+        const contentLower = (article.content || '').toLowerCase();
+        const text = `${titleLower} ${contentLower}`;
+        if (text.includes(tag.toLowerCase())) {
+          total += article.sentiment || 0;
+          count++;
+          if ((article.importance || 0) >= 0.7) highImpact++;
+          if (article.tags) keywords.push(...article.tags.slice(0, 3));
+        }
+      }
+
+      if (count > 0) {
+        symbolSentiment.set(symbol, {
+          total: total / count,
+          count,
+          highImpact,
+          keywords: [...new Set(keywords)].slice(0, 5),
+        });
+      }
+    }
+
+    // Generate signals from sentiment shifts
+    for (const [symbol, data] of symbolSentiment) {
+      const avgSentiment = data.total;
+      let action: TradeAction;
+      let confidence: number;
+      let reasoning: string;
+
+      if (avgSentiment >= 0.4) {
+        action = TradeAction.BUY;
+        confidence = Math.min(0.9, 0.5 + avgSentiment * 0.4 + data.highImpact * 0.05);
+        reasoning = `Strong bullish news sentiment (${(avgSentiment * 100).toFixed(0)}%) across ${data.count} recent article(s). ${data.highImpact} high-impact event(s). Keywords: ${data.keywords.join(', ') || 'none'}`;
+      } else if (avgSentiment <= -0.4) {
+        action = TradeAction.SELL;
+        confidence = Math.min(0.9, 0.5 + Math.abs(avgSentiment) * 0.4 + data.highImpact * 0.05);
+        reasoning = `Strong bearish news sentiment (${(avgSentiment * 100).toFixed(0)}%) across ${data.count} recent article(s). ${data.highImpact} high-impact event(s). Keywords: ${data.keywords.join(', ') || 'none'}`;
+      } else if (avgSentiment >= 0.15) {
+        action = TradeAction.BUY;
+        confidence = 0.3 + avgSentiment * 0.3;
+        reasoning = `Mildly bullish news sentiment (${(avgSentiment * 100).toFixed(0)}%) across ${data.count} article(s). Moderate conviction.`;
+      } else if (avgSentiment <= -0.15) {
+        action = TradeAction.SELL;
+        confidence = 0.3 + Math.abs(avgSentiment) * 0.3;
+        reasoning = `Mildly bearish news sentiment (${(avgSentiment * 100).toFixed(0)}%) across ${data.count} article(s). Moderate conviction.`;
+      } else {
+        continue; // Skip neutral sentiment
+      }
+
+      const sourceArticle = recentNews
+        .filter(a => {
+          const tag = symbol.replace('USDT', '').replace('USD', '');
+          return (a.title || '').toLowerCase().includes(tag.toLowerCase());
+        })
+        .sort((a, b) => (b.importance || 0) - (a.importance || 0))[0]?.title || 'Multiple sources';
+
+      signals.push({
+        symbol,
+        action,
+        confidence: Math.round(confidence * 100) / 100,
+        reasoning,
+        sourceArticle,
+        sentimentShift: avgSentiment,
+        importance: Math.min(1, data.highImpact * 0.3 + data.count * 0.1),
+        strategyName: 'NEWS' as string,
+        signalType: 'NEWS',
+        generatedAt: new Date().toISOString(),
+        indicators: {
+          newsSentiment: avgSentiment,
+          articleCount: data.count,
+          highImpactCount: data.highImpact,
+          topicKeywords: data.keywords,
+        },
+      });
+    }
+
+    return signals.sort((a, b) => b.confidence - a.confidence);
+  }
+
+  /**
+   * Generate demo market data (shared between scan and single signal)
+   */
+  generateDemoMarketData(symbol: string, count: number): MarketDataPoint[] {
+    const prices: Record<string, number> = {
+      BTCUSDT: 45000, ETHUSDT: 2500, SOLUSDT: 100,
+      BNBUSDT: 300, XRPUSDT: 0.5, ADAUSDT: 0.45,
+      DOGEUSDT: 0.08, AVAXUSDT: 35, DOTUSDT: 7,
+    };
+
+    const data: MarketDataPoint[] = [];
+    let price = prices[symbol] || 100;
+    const now = Date.now();
+    const hourMs = 60 * 60 * 1000;
+
+    for (let i = count; i >= 0; i--) {
+      const change = (Math.random() - 0.5) * price * 0.02;
+      const open = price;
+      const close = price + change;
+      const high = Math.max(open, close) + Math.random() * Math.abs(change) * 0.5;
+      const low = Math.min(open, close) - Math.random() * Math.abs(change) * 0.5;
+      const volume = 1000 + Math.random() * 5000;
+
+      data.push({
+        symbol,
+        timeframe: TimeFrame.ONE_HOUR,
+        timestamp: new Date(now - i * hourMs),
+        open, high, low, close, volume,
+      });
+
+      price = close;
+    }
+
+    return data;
+  }
+
+  /**
+   * Build professional signal provider-style details
+   * Computes entry zones, multi-level TPs, R:R, leverage, and narrative
+   */
+  private buildSignalDetails(
+    symbol: string,
+    action: TradeAction,
+    currentPrice: number,
+    technical: TechnicalAnalysis,
+    fundamental: FundamentalAnalysis,
+    sentiment: SentimentAnalysis,
+    risk: RiskAssessment,
+    timeframe: TimeFrame,
+    newsArticles: NewsArticle[]
+  ): SignalDetails {
+    const isBuy = action === TradeAction.BUY;
+    const volatility = risk.marketVolatility;
+
+    // ---- Volatility classification ----
+    const volLabel: SignalDetails['volatility']['label'] =
+      volatility > 0.06 ? 'EXTREME' :
+      volatility > 0.04 ? 'HIGH' :
+      volatility > 0.02 ? 'MODERATE' : 'LOW';
+
+    // ---- Entry zone ----
+    const entrySpread = currentPrice * Math.max(0.002, volatility * 0.3);
+    const entryLow = isBuy ? currentPrice - entrySpread : currentPrice;
+    const entryHigh = isBuy ? currentPrice : currentPrice + entrySpread;
+    const entryMid = (entryLow + entryHigh) / 2;
+
+    // ---- Stop loss ----
+    const slPrice = risk.suggestedStopLoss;
+    const slDistance = Math.abs(entryMid - slPrice);
+    const slPercent = slPrice > 0 ? (slDistance / entryMid) * 100 : 0;
+    const slReasoning = technical.supportLevels.length > 0 && isBuy
+      ? `Placed below nearest support at $${technical.supportLevels[0].toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+      : isBuy
+        ? `Volatility-based: ${(slPercent).toFixed(1)}% below entry`
+        : technical.resistanceLevels.length > 0
+          ? `Placed above nearest resistance at $${technical.resistanceLevels[0].toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+          : `Volatility-based: ${(slPercent).toFixed(1)}% above entry`;
+
+    // ---- Multiple take-profit levels ----
+    const riskMultiple = [
+      { level: 1, mult: 1.5, posPercent: 30, desc: 'Conservative — quick partial' },
+      { level: 2, mult: 2.5, posPercent: 40, desc: 'Moderate — main target' },
+      { level: 3, mult: 4.0, posPercent: 30, desc: 'Aggressive — runner target' },
+    ];
+
+    const takeProfitLevels = riskMultiple.map(({ level, mult, posPercent, desc }) => {
+      let tpPrice: number;
+      if (isBuy) {
+        // For BUY, try to cap TP3 at nearest resistance
+        tpPrice = entryMid + slDistance * mult;
+        if (level === 3 && technical.resistanceLevels.length > 0) {
+          tpPrice = Math.min(tpPrice, technical.resistanceLevels[0]);
+        }
+        // Ensure TP is above entry
+        tpPrice = Math.max(tpPrice, entryMid * 1.001);
+      } else {
+        tpPrice = entryMid - slDistance * mult;
+        if (level === 3 && technical.supportLevels.length > 0) {
+          tpPrice = Math.max(tpPrice, technical.supportLevels[0]);
+        }
+        tpPrice = Math.min(tpPrice, entryMid * 0.999);
+      }
+      const tpPercent = entryMid > 0 ? ((tpPrice - entryMid) / entryMid) * 100 : 0;
+      return {
+        level,
+        price: tpPrice,
+        percentFromEntry: tpPercent,
+        positionPercent: posPercent,
+        description: desc,
+      };
+    });
+
+    // ---- R:R ratio (based on TP2 as main target) ----
+    const tp2Distance = takeProfitLevels.length > 1
+      ? Math.abs(takeProfitLevels[1].price - entryMid)
+      : slDistance;
+    const riskRewardRatio = slDistance > 0 ? tp2Distance / slDistance : 0;
+
+    // ---- Leverage ----
+    const leverageMin = volLabel === 'EXTREME' ? 2 : volLabel === 'HIGH' ? 3 : volLabel === 'MODERATE' ? 5 : 10;
+    const leverageMax = volLabel === 'EXTREME' ? 5 : volLabel === 'HIGH' ? 10 : volLabel === 'MODERATE' ? 20 : 25;
+    const leverageRec = Math.round((leverageMin + leverageMax) / 2);
+    const leverageReasoning = volLabel === 'EXTREME'
+      ? `${volLabel} volatility — keep leverage low to avoid liquidation`
+      : volLabel === 'HIGH'
+        ? `${volLabel} volatility — moderate leverage with tight stops`
+        : `${volLabel} volatility — room for higher leverage with proper risk management`;
+
+    // ---- Time horizon ----
+    const timeHorizonMap: Record<string, SignalDetails['timeHorizon']> = {
+      '1m': 'SCALP', '5m': 'SCALP', '15m': 'SCALP',
+      '1h': 'SWING', '4h': 'SWING',
+      '1d': 'POSITION', '1w': 'POSITION',
+    };
+    const timeHorizon = timeHorizonMap[timeframe] || 'SWING';
+    const timeHorizonDescMap: Record<string, string> = {
+      SCALP: 'Scalp trade — 15min to 4 hours. Quick in-and-out.',
+      SWING: 'Swing trade — 6 to 48 hours. Hold through minor pullbacks.',
+      POSITION: 'Position trade — Days to weeks. Ride the macro trend.',
+    };
+
+    // ---- Market context ----
+    const trendDesc = technical.trend === 'BULLISH'
+      ? `Bullish trend (${Math.round(technical.trendStrength * 100)}% strength)`
+      : technical.trend === 'BEARISH'
+        ? `Bearish trend (${Math.round(technical.trendStrength * 100)}% strength)`
+        : 'Sideways/consolidating market';
+    const sentimentDesc = sentiment.sentimentLabel !== SentimentLabel.NEUTRAL
+      ? `${sentiment.sentimentLabel} sentiment (${(sentiment.overallSentiment * 100).toFixed(0)}%)`
+      : 'Neutral market sentiment';
+    const volDesc = `${volLabel} volatility (ATR: ${(volatility * 100).toFixed(1)}%)`;
+    const ctxParts = [trendDesc, sentimentDesc, volDesc];
+    if (technical.patterns.length > 0) {
+      ctxParts.push(`Patterns: ${technical.patterns.join(', ')}`);
+    }
+    const marketContext = ctxParts.join('. ') + '.';
+
+    // ---- Price action notes ----
+    const priceActionNotes: string[] = [];
+    if (technical.patterns.length > 0) {
+      priceActionNotes.push(`Candlestick patterns: ${technical.patterns.join(', ')}`);
+    }
+    const rsi = technical.indicators.rsi || 50;
+    if (rsi > 70) priceActionNotes.push('RSI overbought — potential reversal zone');
+    else if (rsi < 30) priceActionNotes.push('RSI oversold — potential bounce zone');
+    else if (rsi > 55) priceActionNotes.push('RSI bullish momentum building');
+    else if (rsi < 45) priceActionNotes.push('RSI bearish pressure increasing');
+
+    const macdHist = technical.indicators.macdHistogram || 0;
+    if (Math.abs(macdHist) > 0) {
+      priceActionNotes.push(`MACD histogram ${macdHist > 0 ? 'positive (bullish momentum)' : 'negative (bearish momentum)'}`);
+    }
+
+    const bbPercent = technical.indicators.bollingerPercentB || 0.5;
+    if (bbPercent > 0.8) priceActionNotes.push('Price near upper Bollinger Band — overextended');
+    else if (bbPercent < 0.2) priceActionNotes.push('Price near lower Bollinger Band — oversold region');
+
+    const adx = technical.indicators.adx || 0;
+    if (adx > 25) priceActionNotes.push(`Strong trend (ADX: ${adx.toFixed(1)})`);
+    else if (adx < 20) priceActionNotes.push(`Weak/no trend (ADX: ${adx.toFixed(1)}) — range-bound`);
+
+    const stochK = technical.indicators.stochasticK || 50;
+    if (stochK > 80) priceActionNotes.push('Stochastic overbought — watch for sell signals');
+    else if (stochK < 20) priceActionNotes.push('Stochastic oversold — watch for buy signals');
+
+    const cloudPos = technical.indicators.ichimokuCloudTop && technical.indicators.ichimokuCloudBottom
+      ? currentPrice > technical.indicators.ichimokuCloudTop
+        ? 'Price above Ichimoku cloud — bullish zone'
+        : currentPrice < technical.indicators.ichimokuCloudBottom
+          ? 'Price below Ichimoku cloud — bearish zone'
+          : 'Price inside Ichimoku cloud — indecision zone'
+      : '';
+
+    if (cloudPos) priceActionNotes.push(cloudPos);
+
+    if (priceActionNotes.length === 0) {
+      priceActionNotes.push('No strong price action signals detected');
+    }
+
+    // ---- Fundamental catalysts ----
+    const catalysts: string[] = [];
+    if (fundamental.marketEvents.length > 0) {
+      fundamental.marketEvents.slice(0, 3).forEach(e => catalysts.push(e));
+    }
+    if (fundamental.economicFactors.length > 0) {
+      catalysts.push(`Macro factors: ${fundamental.economicFactors.slice(0, 3).join(', ')}`);
+    }
+    if (newsArticles.some(a => a.importance && a.importance > 0.7)) {
+      const highImpact = newsArticles.filter(a => a.importance && a.importance > 0.7);
+      catalysts.push(`${highImpact.length} high-impact news event(s) detected`);
+    }
+    if (catalysts.length === 0) {
+      catalysts.push('No significant fundamental catalysts at this time');
+    }
+
+    // ---- Key levels ----
+    const nearestSupport = technical.supportLevels.length > 0 ? technical.supportLevels[0] : currentPrice * 0.97;
+    const nearestResistance = technical.resistanceLevels.length > 0 ? technical.resistanceLevels[0] : currentPrice * 1.03;
+
+    // ---- Indicator summary ----
+    const indicatorSummary: SignalDetails['indicatorSummary'] = [];
+
+    const rsiSignal: 'BULLISH' | 'BEARISH' | 'NEUTRAL' = rsi < 35 ? 'BULLISH' : rsi > 65 ? 'BEARISH' : 'NEUTRAL';
+    indicatorSummary.push({
+      name: 'RSI',
+      value: rsi,
+      signal: rsiSignal,
+      note: rsi < 35 ? 'Oversold — bullish reversal potential' : rsi > 65 ? 'Overbought — bearish reversal potential' : 'Neutral zone',
+    });
+
+    const macdSignal: 'BULLISH' | 'BEARISH' | 'NEUTRAL' = macdHist > 0 ? 'BULLISH' : 'BEARISH';
+    indicatorSummary.push({
+      name: 'MACD',
+      value: technical.indicators.macd || 0,
+      signal: macdSignal,
+      note: macdHist > 0 ? 'Bullish crossover momentum' : 'Bearish crossover momentum',
+    });
+
+    const adxSignal: 'BULLISH' | 'BEARISH' | 'NEUTRAL' = adx > 25 ? (technical.trend === 'BULLISH' ? 'BULLISH' : 'BEARISH') : 'NEUTRAL';
+    indicatorSummary.push({
+      name: 'ADX',
+      value: adx,
+      signal: adxSignal,
+      note: adx > 25 ? `Strong trend (${technical.trend})` : 'Weak/no trend — avoid breakout trades',
+    });
+
+    const stochSignal: 'BULLISH' | 'BEARISH' | 'NEUTRAL' = stochK < 20 ? 'BULLISH' : stochK > 80 ? 'BEARISH' : 'NEUTRAL';
+    indicatorSummary.push({
+      name: 'Stochastic',
+      value: stochK,
+      signal: stochSignal,
+      note: stochK < 20 ? 'Oversold zone' : stochK > 80 ? 'Overbought zone' : 'Neutral zone',
+    });
+
+    const bbSignal: 'BULLISH' | 'BEARISH' | 'NEUTRAL' = bbPercent < 0.2 ? 'BULLISH' : bbPercent > 0.8 ? 'BEARISH' : 'NEUTRAL';
+    indicatorSummary.push({
+      name: 'Bollinger %B',
+      value: bbPercent,
+      signal: bbSignal,
+      note: bbPercent < 0.2 ? 'Price at lower band — oversold' : bbPercent > 0.8 ? 'Price at upper band — overbought' : 'Price within bands',
+    });
+
+    const vwap = technical.indicators.vwap || 0;
+    if (vwap > 0 && currentPrice > 0) {
+      const aboveVWAP = currentPrice > vwap;
+      indicatorSummary.push({
+        name: 'VWAP',
+        value: vwap,
+        signal: aboveVWAP ? 'BULLISH' : 'BEARISH',
+        note: aboveVWAP ? `Price above VWAP ($${vwap.toFixed(2)}) — buyers in control` : `Price below VWAP ($${vwap.toFixed(2)}) — sellers in control`,
+      });
+    }
+
+    // ---- News sentiment indicator ----
+    const newsSentimentValue = sentiment.overallSentiment;
+    const newsSignal: 'BULLISH' | 'BEARISH' | 'NEUTRAL' =
+      newsSentimentValue > 0.2 ? 'BULLISH' : newsSentimentValue < -0.2 ? 'BEARISH' : 'NEUTRAL';
+    indicatorSummary.push({
+      name: 'News Sentiment',
+      value: newsSentimentValue,
+      signal: newsSignal,
+      note: newsSentimentValue > 0.2
+        ? `Positive news flow (${sentiment.sentimentLabel})`
+        : newsSentimentValue < -0.2
+          ? `Negative news flow (${sentiment.sentimentLabel})`
+          : 'Neutral news sentiment',
+    });
+
+    // ---- Pattern analysis ----
+    const bullishPatterns = ['HAMMER', 'MORNING_STAR', 'BULLISH_ENGULFING', 'INVERTED_HAMMER'];
+    const bearishPatterns = ['BEARISH_ENGULFING', 'EVENING_STAR'];
+    const hasBullishPattern = technical.patterns.some(p => bullishPatterns.includes(p));
+    const hasBearishPattern = technical.patterns.some(p => bearishPatterns.includes(p));
+    const patternReliability: SignalDetails['patternAnalysis']['reliability'] =
+      technical.patterns.length > 1 ? 'HIGH' : technical.patterns.length === 1 ? 'MEDIUM' : 'LOW';
+    const patternSummary = technical.patterns.length > 0
+      ? `${technical.patterns.join(', ')} — ${hasBullishPattern ? 'bullish' : hasBearishPattern ? 'bearish' : 'mixed'} confirmation`
+      : 'No significant candlestick patterns detected';
+
+    return {
+      currentPrice,
+      entryZone: {
+        low: entryLow,
+        high: entryHigh,
+        strategy: entrySpread < currentPrice * 0.003 ? 'MARKET' : 'LIMIT',
+        description: isBuy
+          ? `Enter on pullback to $${entryLow.toFixed(2)} or market at $${entryHigh.toFixed(2)}`
+          : `Enter on bounce to $${entryHigh.toFixed(2)} or market at $${entryLow.toFixed(2)}`,
+      },
+      takeProfitLevels,
+      stopLoss: {
+        price: slPrice,
+        percentFromEntry: slPercent,
+        reasoning: slReasoning,
+        type: 'HARD',
+      },
+      riskRewardRatio,
+      leverage: {
+        min: leverageMin,
+        max: leverageMax,
+        recommended: leverageRec,
+        reasoning: leverageReasoning,
+      },
+      timeHorizon,
+      timeHorizonDescription: timeHorizonDescMap[timeHorizon] || timeHorizonDescMap.SWING,
+      volatility: {
+        value: volatility,
+        label: volLabel,
+        atrPercent: volatility * 100,
+      },
+      marketContext,
+      priceActionNotes,
+      fundamentalCatalysts: catalysts,
+      keyLevels: {
+        supports: technical.supportLevels,
+        resistances: technical.resistanceLevels,
+        nearestSupport,
+        nearestResistance,
+      },
+      indicatorSummary,
+      patternAnalysis: {
+        detected: technical.patterns,
+        reliability: patternReliability,
+        summary: patternSummary,
+      },
     };
   }
 
@@ -1425,14 +2004,10 @@ export class SignalEngine {
   private calculateOverallScore(
     technical: TechnicalAnalysis,
     fundamental: FundamentalAnalysis,
-    sentiment: SentimentAnalysis
+    sentiment: SentimentAnalysis,
+    strategy?: StrategyType
   ): number {
-    // Rebalanced: Technical signals are the primary driver for short-term trading
-    const weights = {
-      technical: 0.50,
-      fundamental: 0.25,
-      sentiment: 0.25
-    };
+    const weights = this.getStrategyWeights(strategy);
 
     return (
       technical.score * weights.technical +
@@ -1448,8 +2023,71 @@ export class SignalEngine {
     technical: TechnicalAnalysis,
     fundamental: FundamentalAnalysis,
     sentiment: SentimentAnalysis,
-    overallScore: number
+    overallScore: number,
+    strategy?: StrategyType
   ): TradeAction {
+    const rsi = technical.indicators.rsi || 50;
+    const macdHist = technical.indicators.macdHistogram || 0;
+    const adx = technical.indicators.adx || 0;
+    const bbPercentB = technical.indicators.bollingerPercentB || 0.5;
+    const stochK = technical.indicators.stochasticK || 50;
+    const vwap = technical.indicators.vwap || 0;
+    const lastClose = technical.indicators.lastClose || 0;
+
+    // Strategy-specific overrides
+    if (strategy === StrategyType.MOMENTUM) {
+      // Momentum: RSI direction + MACD histogram + trend strength
+      const rsiMomentum = rsi > 50 && rsi < 70; // Bullish but not overbought
+      const macdBullish = macdHist > 0 && macdHist > (technical.indicators.macdSignal || 0);
+      const strongTrend = adx > 20;
+      if (rsiMomentum && macdBullish && strongTrend && technical.trend === 'BULLISH') {
+        return TradeAction.BUY;
+      }
+      if (rsi < 50 && rsi > 30 && macdHist < 0 && strongTrend && technical.trend === 'BEARISH') {
+        return TradeAction.SELL;
+      }
+      // Fall through to default logic below
+    }
+
+    if (strategy === StrategyType.BREAKOUT) {
+      // Breakout: Bollinger squeeze ending + high ADX + price at resistance
+      const bbSqueeze = (technical.indicators.bollingerBandwidth || 0) < 0.03;
+      const bbExpanding = !bbSqueeze && bbPercentB > 0.8;
+      const strongTrend = adx > 25;
+      if ((bbExpanding || (bbSqueeze && stochK > 70)) && strongTrend) {
+        return technical.trend === 'BULLISH' ? TradeAction.BUY : TradeAction.SELL;
+      }
+      // Fall through to default logic below
+    }
+
+    if (strategy === StrategyType.MEAN_REVERSION) {
+      // Mean reversion: RSI extreme + Bollinger band extremes
+      if (rsi < 30 && bbPercentB < 0.2 && sentiment.overallSentiment > -0.3) {
+        return TradeAction.BUY;
+      }
+      if (rsi > 70 && bbPercentB > 0.8 && sentiment.overallSentiment < 0.3) {
+        return TradeAction.SELL;
+      }
+      if (stochK < 20 && stochK > (technical.indicators.stochasticD || 50)) {
+        return TradeAction.BUY;
+      }
+      if (stochK > 80 && stochK < (technical.indicators.stochasticD || 50)) {
+        return TradeAction.SELL;
+      }
+      // Fall through to default logic below
+    }
+
+    if (strategy === StrategyType.VWAP_TWAP) {
+      // VWAP: Price significantly above/below VWAP with volume confirmation
+      if (vwap > 0 && lastClose > 0) {
+        const spread = (lastClose - vwap) / vwap;
+        if (spread > 0.01 && rsi > 50) return TradeAction.BUY;  // 1% above VWAP
+        if (spread < -0.01 && rsi < 50) return TradeAction.SELL; // 1% below VWAP
+      }
+      // Fall through to default logic below
+    }
+
+    // Default logic (shared across all strategies as fallback)
     // Strong buy conditions
     if (overallScore >= 0.7 && 
         technical.trend === 'BULLISH' &&
@@ -1466,14 +2104,14 @@ export class SignalEngine {
 
     // Moderate buy
     if (overallScore >= 0.6 &&
-        (technical.indicators.rsi || 50) < 70 &&
+        rsi < 70 &&
         sentiment.overallSentiment > 0) {
       return TradeAction.BUY;
     }
 
     // Moderate sell
     if (overallScore <= 0.4 &&
-        (technical.indicators.rsi || 50) > 30 &&
+        rsi > 30 &&
         sentiment.overallSentiment < 0) {
       return TradeAction.SELL;
     }

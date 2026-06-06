@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,10 +21,30 @@ import {
   RefreshCw, Play, Square, BarChart3, Newspaper, Settings,
   Brain, Target, Shield, Zap, CheckCircle, XCircle, Clock,
   AlertCircle, Info, X, Flame, Gauge as GaugeIcon, ShieldAlert,
-  ChevronUp, ChevronDown, MoveDown, Percent, Repeat
+  ChevronUp, ChevronDown, MoveDown, Percent, Repeat,
+  ArrowUpRight, ArrowDownRight, Crosshair, Timer, Layers, CandlestickChart,
+  Radio, RadioTower, Power, Eye, EyeOff, ScanSearch, NewspaperIcon
 } from 'lucide-react';
 
 // Types
+interface SignalDetails {
+  currentPrice: number;
+  entryZone: { low: number; high: number; strategy: string; description: string };
+  takeProfitLevels: Array<{ level: number; price: number; percentFromEntry: number; positionPercent: number; description: string }>;
+  stopLoss: { price: number; percentFromEntry: number; reasoning: string; type: string };
+  riskRewardRatio: number;
+  leverage: { min: number; max: number; recommended: number; reasoning: string };
+  timeHorizon: string;
+  timeHorizonDescription: string;
+  volatility: { value: number; label: string; atrPercent: number };
+  marketContext: string;
+  priceActionNotes: string[];
+  fundamentalCatalysts: string[];
+  keyLevels: { supports: number[]; resistances: number[]; nearestSupport: number; nearestResistance: number };
+  indicatorSummary: Array<{ name: string; value: number; signal: string; note: string }>;
+  patternAnalysis: { detected: string[]; reliability: string; summary: string };
+}
+
 interface Signal {
   id: string;
   symbol: string;
@@ -32,14 +52,20 @@ interface Signal {
   confidence: number;
   rating: number;
   reasoning: string;
-  priceTarget?: number;
-  stopLoss?: number;
-  takeProfit?: number;
+  status: string;
+  createdAt: string;
+  demo?: boolean;
   sentimentScore?: number;
   technicalScore?: number;
   fundamentalScore?: number;
-  status: string;
-  createdAt: string;
+  details?: SignalDetails;
+  analysis?: {
+    technicalAnalysis: { trend: string; trendStrength: number; patterns: string[]; score: number };
+    fundamentalAnalysis: { score: number };
+    sentimentAnalysis: { overallSentiment: number; sentimentLabel: string };
+    warnings?: string[];
+  };
+  riskAssessment?: { riskLevel: string; riskFactors: string[]; marketVolatility: number };
 }
 
 interface Position {
@@ -49,8 +75,10 @@ interface Position {
   quantity: number;
   avgEntryPrice: number;
   currentPrice: number;
+  marketValue?: number;
   unrealizedPnL: number;
   unrealizedPnLPercent: number;
+  leverage?: number;
   stopLoss?: number;
   takeProfit?: number;
   trailingStop?: number;
@@ -58,6 +86,37 @@ interface Position {
   trailingStopActivated?: boolean;
   realizedPnL?: number;
   totalFees?: number;
+  openedAt?: string;
+}
+
+interface TradeHistoryEntry {
+  id: string;
+  symbol: string;
+  side: 'BUY' | 'SELL';
+  type: string;
+  quantity: number;
+  price: number;
+  leverage: number;
+  stopLoss?: number;
+  takeProfit?: number;
+  status: string;
+  pnl?: number;
+  filledAt?: string;
+  closedAt?: string;
+}
+
+interface RealizedTrade {
+  id: string;
+  symbol: string;
+  side: 'LONG' | 'SHORT';
+  entryPrice: number;
+  exitPrice: number;
+  quantity: number;
+  realizedPnL: number;
+  fees: number;
+  netPnL: number;
+  pnlPercent: number;
+  closedAt: string;
 }
 
 interface Portfolio {
@@ -102,6 +161,46 @@ interface EquityPoint {
   peak: number;
 }
 
+// Active Mode types
+interface ActiveScanSignal {
+  signal: Signal;
+  analysis?: {
+    technicalAnalysis: { trend: string; trendStrength: number; patterns: string[]; score: number };
+    fundamentalAnalysis: { score: number };
+    sentimentAnalysis: { overallSentiment: number; sentimentLabel: string };
+    warnings?: string[];
+  };
+  riskAssessment?: { riskLevel: string; marketVolatility: number };
+  details?: SignalDetails;
+  strategyName: string;
+  signalType: 'TECHNICAL' | 'NEWS';
+  scannedAt: string;
+  // News signal extras
+  sourceArticle?: string;
+  sentimentShift?: number;
+  indicators?: {
+    newsSentiment: number;
+    articleCount: number;
+    highImpactCount: number;
+    topicKeywords: string[];
+  };
+}
+
+const ALL_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'AVAXUSDT', 'DOTUSDT'];
+const STRATEGY_OPTIONS = [
+  { value: 'DEFAULT', label: 'Balanced', desc: 'Equal weight across all factors' },
+  { value: 'MOMENTUM', label: 'Momentum', desc: 'RSI trend + MACD + volume surge' },
+  { value: 'BREAKOUT', label: 'Breakout', desc: 'Bollinger squeeze + ADX + resistance' },
+  { value: 'MEAN_REVERSION', label: 'Mean Reversion', desc: 'RSI extreme + Bollinger bounce' },
+  { value: 'VWAP_TWAP', label: 'VWAP/TWAP', desc: 'Price vs VWAP spread + volume' },
+];
+const SCAN_INTERVALS = [
+  { value: 30, label: '30s' },
+  { value: 60, label: '1 min' },
+  { value: 120, label: '2 min' },
+  { value: 300, label: '5 min' },
+];
+
 // Colors for charts
 const COLORS = ['#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
 
@@ -126,6 +225,46 @@ export default function TradingDashboard() {
   const [riskMetrics, setRiskMetrics] = useState<RiskMetrics | null>(null);
   const [equityCurve, setEquityCurve] = useState<EquityPoint[]>([]);
   const [trailingStopDistance, setTrailingStopDistance] = useState<Record<string, number>>({});
+  const [tradeHistory, setTradeHistory] = useState<TradeHistoryEntry[]>([]);
+  const [realizedTrades, setRealizedTrades] = useState<RealizedTrade[]>([]);
+
+  // Trading mode & platform settings
+  const [tradingMode, setTradingMode] = useState<'demo' | 'live'>('demo');
+  const [showSettings, setShowSettings] = useState(false);
+  const [exchangeAccounts, setExchangeAccounts] = useState<Array<{
+    id: string; name: string; exchange: string; apiKey: string; apiSecret: string;
+    testnet: boolean; isActive: boolean; lastTested: string | null; lastError: string | null;
+  }>>([]);
+  const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connected' | 'testing' | 'error'>('disconnected');
+  const [liveBalance, setLiveBalance] = useState<{ totalEquity: number; totalAvailableBalance: number } | null>(null);
+  const [livePositions, setLivePositions] = useState<Position[]>([]);
+  // New account form
+  const [newAccount, setNewAccount] = useState({ name: 'Bybit Main', apiKey: '', apiSecret: '', testnet: true });
+  const [accountFormMode, setAccountFormMode] = useState<'add' | 'edit'>('add');
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+
+  // Trade Order Form (expanded from signal)
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [orderForm, setOrderForm] = useState({
+    symbol: '', side: 'BUY' as 'BUY' | 'SELL', orderType: 'MARKET' as 'MARKET' | 'LIMIT',
+    entryPrice: 0, quantity: 0, leverage: 5,
+    stopLoss: 0, takeProfit: 0, takeProfitLevel: 1,
+    riskPercent: 1, // % of portfolio to risk on this trade
+  });
+  const [orderSubmitting, setOrderSubmitting] = useState(false);
+
+  // Active Mode state
+  const [activeMode, setActiveMode] = useState(false);
+  const [activeScanning, setActiveScanning] = useState(false);
+  const [activeScanSignals, setActiveScanSignals] = useState<ActiveScanSignal[]>([]);
+  const [activeShowConfig, setActiveShowConfig] = useState(true);
+  const [activePairs, setActivePairs] = useState<string[]>(['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT']);
+  const [activeStrategies, setActiveStrategies] = useState<string[]>(['DEFAULT', 'MOMENTUM', 'BREAKOUT']);
+  const [activeScanInterval, setActiveScanInterval] = useState(60);
+  const [activeNewsEnabled, setActiveNewsEnabled] = useState(true);
+  const [lastScanTime, setLastScanTime] = useState<number>(0);
+  const [scanInProgress, setScanInProgress] = useState(false);
+  const activeIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Symbol options
   const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT'];
@@ -192,6 +331,9 @@ export default function TradingDashboard() {
 
       // Fetch risk metrics
       fetchRiskMetrics();
+
+      // Fetch trade history
+      fetchTradeHistory();
 
       // Generate equity curve
       generateEquityCurve();
@@ -263,7 +405,13 @@ export default function TradingDashboard() {
       });
       const data = await res.json();
       if (data.success) {
-        setSignals((prev) => [data.data.signal, ...prev].slice(0, 50));
+        const fullSignal = {
+          ...data.data.signal,
+          details: data.data.signalDetails,
+          analysis: data.data.analysis,
+          riskAssessment: data.data.riskAssessment,
+        };
+        setSignals((prev) => [fullSignal, ...prev].slice(0, 50));
         // Refresh risk metrics after new signal
         fetchRiskMetrics();
       }
@@ -274,9 +422,143 @@ export default function TradingDashboard() {
     }
   }, [selectedSymbol]);
 
-  const placeDemoOrder = async (symbol: string, side: 'BUY' | 'SELL', quantity: number) => {
+  // Active Mode: toggle pair
+  const toggleActivePair = useCallback((pair: string) => {
+    setActivePairs(prev =>
+      prev.includes(pair) ? prev.filter(p => p !== pair) : prev.length < 9 ? [...prev, pair] : prev
+    );
+  }, []);
+
+  // Active Mode: toggle strategy
+  const toggleActiveStrategy = useCallback((strategy: string) => {
+    setActiveStrategies(prev =>
+      prev.includes(strategy) ? prev.filter(s => s !== strategy) : prev.length < 5 ? [...prev, strategy] : prev
+    );
+  }, []);
+
+  // Active Mode: run a single scan cycle
+  const runActiveScan = useCallback(async () => {
+    if (activePairs.length === 0 || activeStrategies.length === 0) return;
+    setScanInProgress(true);
     try {
-      await fetch('/api/trading/demo', {
+      const results = await Promise.allSettled([
+        fetch('/api/trading/signals/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ symbols: activePairs, strategies: activeStrategies, timeframe: '1h' }),
+        }).then(r => r.json()),
+        ...(activeNewsEnabled ? [
+          fetch('/api/trading/signals/news-signals', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ symbols: activePairs }),
+          }).then(r => r.json()),
+        ] : []),
+      ]);
+
+      const newSignals: ActiveScanSignal[] = [];
+
+      // Process scan results
+      const scanResult = results[0];
+      if (scanResult.status === 'fulfilled' && scanResult.value.success) {
+        for (const r of scanResult.value.data) {
+          newSignals.push({
+            signal: {
+              id: `scan-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              symbol: r.signal.symbol,
+              action: r.signal.action as 'BUY' | 'SELL' | 'HOLD',
+              confidence: r.signal.confidence,
+              rating: r.signal.rating,
+              reasoning: r.signal.reasoning,
+              status: 'PENDING',
+              createdAt: new Date().toISOString(),
+              demo: true,
+            },
+            analysis: r.analysis,
+            riskAssessment: r.riskAssessment,
+            details: r.signalDetails,
+            strategyName: r.strategyName,
+            signalType: r.signalType,
+            scannedAt: r.scannedAt,
+          });
+        }
+      }
+
+      // Process news results
+      if (activeNewsEnabled && results[1]) {
+        const newsResult = results[1];
+        if (newsResult.status === 'fulfilled' && newsResult.value.success) {
+          for (const ns of newsResult.value.data) {
+            newSignals.push({
+              signal: {
+                id: `news-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                symbol: ns.symbol,
+                action: ns.action as 'BUY' | 'SELL' | 'HOLD',
+                confidence: ns.confidence,
+                rating: Math.round(ns.confidence * 100),
+                reasoning: ns.reasoning,
+                status: 'PENDING',
+                createdAt: new Date().toISOString(),
+                demo: true,
+              },
+              strategyName: 'NEWS',
+              signalType: 'NEWS',
+              scannedAt: ns.generatedAt,
+              sourceArticle: ns.sourceArticle,
+              sentimentShift: ns.sentimentShift,
+              indicators: ns.indicators,
+            });
+          }
+        }
+      }
+
+      setLastScanTime(Date.now());
+      setActiveScanSignals(prev => [...newSignals, ...prev].slice(0, 100));
+    } catch (err) {
+      console.error('Active scan error:', err);
+    } finally {
+      setScanInProgress(false);
+    }
+  }, [activePairs, activeStrategies, activeNewsEnabled]);
+
+  // Active Mode: start/stop scanning
+  useEffect(() => {
+    if (activeScanning && activePairs.length > 0 && activeStrategies.length > 0) {
+      // Run immediately
+      runActiveScan();
+      // Then set interval
+      activeIntervalRef.current = setInterval(runActiveScan, activeScanInterval * 1000);
+    } else {
+      if (activeIntervalRef.current) {
+        clearInterval(activeIntervalRef.current);
+        activeIntervalRef.current = null;
+      }
+    }
+    return () => {
+      if (activeIntervalRef.current) {
+        clearInterval(activeIntervalRef.current);
+      }
+    };
+  }, [activeScanning, activeScanInterval]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const placeDemoOrder = async (
+    symbol: string,
+    side: 'BUY' | 'SELL',
+    quantity: number,
+    opts?: { price?: number; stopLoss?: number; takeProfit?: number; leverage?: number }
+  ) => {
+    try {
+      const price = opts?.price;
+      if (price && price > 0) {
+        // Ensure the demo trader has a current price for this symbol
+        await fetch('/api/trading/demo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'update_price', symbol, price })
+        });
+      }
+
+      const res = await fetch('/api/trading/demo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -284,15 +566,27 @@ export default function TradingDashboard() {
           symbol,
           side,
           type: 'MARKET',
-          quantity
+          quantity,
+          leverage: opts?.leverage,
+          stopLoss: opts?.stopLoss,
+          takeProfit: opts?.takeProfit
         })
       });
-      // Refresh portfolio
-      const res = await fetch('/api/trading/demo?action=portfolio');
-      const data = await res.json();
-      if (data.success) {
-        setPortfolio(data.data);
+      const result = await res.json();
+      if (!result.success) {
+        console.error('Order failed:', result.error);
       }
+
+      // Refresh portfolio + positions + history
+      const [portRes, posRes] = await Promise.all([
+        fetch('/api/trading/demo?action=portfolio'),
+        fetch('/api/trading/demo?action=positions')
+      ]);
+      const portData = await portRes.json();
+      const posData = await posRes.json();
+      if (portData.success) setPortfolio(portData.data);
+      if (posData.success) setPositions(posData.data);
+      fetchTradeHistory();
     } catch (error) {
       console.error('Error placing order:', error);
     }
@@ -346,11 +640,279 @@ export default function TradingDashboard() {
       setPositions([]);
       setSignals([]);
       setRiskMetrics(null);
+      setTradeHistory([]);
+      setRealizedTrades([]);
       generateEquityCurve();
     } catch (error) {
       console.error('Error resetting demo:', error);
     }
   };
+
+  // ── Exchange Account Management ──
+  const fetchExchangeAccounts = async () => {
+    try {
+      const res = await fetch('/api/trading/settings');
+      const data = await res.json();
+      if (data.success) setExchangeAccounts(data.data);
+    } catch (error) {
+      console.error('Error fetching exchange accounts:', error);
+    }
+  };
+
+  const saveExchangeAccount = async () => {
+    try {
+      const res = await fetch('/api/trading/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'save',
+          ...(accountFormMode === 'edit' && editingAccountId ? { id: editingAccountId } : {}),
+          name: newAccount.name,
+          exchange: 'bybit',
+          apiKey: newAccount.apiKey,
+          apiSecret: newAccount.apiSecret,
+          testnet: newAccount.testnet,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setNewAccount({ name: 'Bybit Main', apiKey: '', apiSecret: '', testnet: true });
+        setAccountFormMode('add');
+        setEditingAccountId(null);
+        fetchExchangeAccounts();
+      }
+    } catch (error) {
+      console.error('Error saving account:', error);
+    }
+  };
+
+  const testExchangeConnection = async (accountId: string) => {
+    setConnectionStatus('testing');
+    try {
+      const res = await fetch('/api/trading/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'test_connection', id: accountId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setConnectionStatus('connected');
+        setLiveBalance({ totalEquity: data.data.totalEquity, totalAvailableBalance: data.data.availableBalance });
+      } else {
+        setConnectionStatus('error');
+      }
+      fetchExchangeAccounts();
+      return data;
+    } catch (error) {
+      setConnectionStatus('error');
+      console.error('Error testing connection:', error);
+    }
+  };
+
+  const deleteExchangeAccount = async (accountId: string) => {
+    try {
+      await fetch('/api/trading/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', id: accountId }),
+      });
+      fetchExchangeAccounts();
+    } catch (error) {
+      console.error('Error deleting account:', error);
+    }
+  };
+
+  const activateExchangeAccount = async (accountId: string) => {
+    try {
+      await fetch('/api/trading/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'activate', id: accountId }),
+      });
+      fetchExchangeAccounts();
+    } catch (error) {
+      console.error('Error activating account:', error);
+    }
+  };
+
+  // ── Live Trading Functions ──
+  const fetchLiveData = async () => {
+    if (tradingMode !== 'live') return;
+    try {
+      const [balRes, posRes] = await Promise.all([
+        fetch('/api/trading/live?action=balance'),
+        fetch('/api/trading/live?action=positions'),
+      ]);
+      const balData = await balRes.json();
+      const posData = await posRes.json();
+      if (balData.success) setLiveBalance({ totalEquity: balData.data.totalEquity, totalAvailableBalance: balData.data.totalAvailableBalance });
+      if (posData.success) setLivePositions(posData.data);
+    } catch (error) {
+      console.error('Error fetching live data:', error);
+    }
+  };
+
+  const placeLiveOrder = async (
+    symbol: string,
+    side: 'BUY' | 'SELL',
+    quantity: number,
+    opts?: { price?: number; stopLoss?: number; takeProfit?: number; leverage?: number }
+  ) => {
+    try {
+      const res = await fetch('/api/trading/live', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'place_order',
+          symbol,
+          side,
+          type: 'MARKET',
+          quantity,
+          price: opts?.price,
+          stopLoss: opts?.stopLoss,
+          takeProfit: opts?.takeProfit,
+          leverage: opts?.leverage,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchLiveData();
+      }
+      return data;
+    } catch (error) {
+      console.error('Error placing live order:', error);
+      return { success: false, error: 'Failed to place order' };
+    }
+  };
+
+  const closeLivePosition = async (symbol: string, side?: 'LONG' | 'SHORT') => {
+    try {
+      const res = await fetch('/api/trading/live', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'close_position', symbol, side }),
+      });
+      const data = await res.json();
+      if (data.success) fetchLiveData();
+      return data;
+    } catch (error) {
+      console.error('Error closing live position:', error);
+      return { success: false, error: 'Failed to close position' };
+    }
+  };
+
+  // Unified order placement based on trading mode
+  const placeOrder = async (
+    symbol: string,
+    side: 'BUY' | 'SELL',
+    quantity: number,
+    opts?: { price?: number; stopLoss?: number; takeProfit?: number; leverage?: number }
+  ) => {
+    if (tradingMode === 'live') {
+      return placeLiveOrder(symbol, side, quantity, opts);
+    }
+    return placeDemoOrder(symbol, side, quantity, opts);
+  };
+
+  // Unified close position based on trading mode
+  const closeTrade = async (symbol: string) => {
+    if (tradingMode === 'live') {
+      return closeLivePosition(symbol);
+    }
+    return closePosition(symbol);
+  };
+
+  // ── Trade Order Panel Helpers ──
+  const openOrderPanel = (signalId: string, details: SignalDetails | undefined, signalAction: 'BUY' | 'SELL' | 'HOLD', symbol: string) => {
+    if (signalAction === 'HOLD') return;
+    const balance = tradingMode === 'live' && liveBalance ? liveBalance.totalEquity : portfolio.totalValue;
+    const price = details?.currentPrice || 0;
+    const sl = details?.stopLoss?.price || 0;
+    const tp = details?.takeProfitLevels?.[0]?.price || 0;
+    const lev = details?.leverage?.recommended || 5;
+    // Calculate quantity based on risk %
+    const slDistance = sl > 0 && price > 0 ? Math.abs(price - sl) : price * 0.02; // default 2% SL
+    const riskAmount = balance * 0.01; // 1% default risk
+    const qty = slDistance > 0 ? riskAmount / slDistance : 0.01;
+
+    setOrderForm({
+      symbol, side: signalAction as 'BUY' | 'SELL', orderType: 'MARKET',
+      entryPrice: price, quantity: Math.max(0.001, parseFloat(qty.toFixed(6))), leverage: lev,
+      stopLoss: sl, takeProfit: tp, takeProfitLevel: 1,
+      riskPercent: 1,
+    });
+    setExpandedOrderId(signalId);
+  };
+
+  const updateOrderRisk = (riskPct: number) => {
+    const balance = tradingMode === 'live' && liveBalance ? liveBalance.totalEquity : portfolio.totalValue;
+    const price = orderForm.entryPrice;
+    const sl = orderForm.stopLoss;
+    const slDistance = sl > 0 && price > 0 ? Math.abs(price - sl) : price * 0.02;
+    const riskAmount = balance * (riskPct / 100);
+    const qty = slDistance > 0 ? riskAmount / slDistance : 0.01;
+    setOrderForm(prev => ({
+      ...prev,
+      riskPercent: riskPct,
+      quantity: Math.max(0.001, parseFloat(qty.toFixed(6))),
+    }));
+  };
+
+  const updateOrderQuantity = (qty: number) => {
+    const balance = tradingMode === 'live' && liveBalance ? liveBalance.totalEquity : portfolio.totalValue;
+    const price = orderForm.entryPrice;
+    const sl = orderForm.stopLoss;
+    const slDistance = sl > 0 && price > 0 ? Math.abs(price - sl) : price * 0.02;
+    const riskAmount = qty * slDistance;
+    const riskPct = balance > 0 ? (riskAmount / balance) * 100 : 0;
+    setOrderForm(prev => ({
+      ...prev,
+      quantity: Math.max(0.001, parseFloat(qty.toFixed(6))),
+      riskPercent: parseFloat(riskPct.toFixed(2)),
+    }));
+  };
+
+  const updateOrderStopLoss = (sl: number) => {
+    const balance = tradingMode === 'live' && liveBalance ? liveBalance.totalEquity : portfolio.totalValue;
+    const price = orderForm.entryPrice;
+    const qty = orderForm.quantity;
+    const slDistance = price > 0 && sl > 0 ? Math.abs(price - sl) : price * 0.02;
+    const riskAmount = qty * slDistance;
+    const riskPct = balance > 0 ? (riskAmount / balance) * 100 : 0;
+    setOrderForm(prev => ({
+      ...prev,
+      stopLoss: sl,
+      riskPercent: parseFloat(riskPct.toFixed(2)),
+    }));
+  };
+
+  const submitOrder = async () => {
+    setOrderSubmitting(true);
+    try {
+      await placeOrder(orderForm.symbol, orderForm.side, orderForm.quantity, {
+        price: orderForm.orderType === 'LIMIT' ? orderForm.entryPrice : undefined,
+        stopLoss: orderForm.stopLoss,
+        takeProfit: orderForm.takeProfit,
+        leverage: orderForm.leverage,
+      });
+      setExpandedOrderId(null);
+    } finally {
+      setOrderSubmitting(false);
+    }
+  };
+
+  // Fetch exchange accounts on mount + live data polling
+  useEffect(() => {
+    fetchExchangeAccounts();
+  }, []);
+
+  useEffect(() => {
+    if (tradingMode === 'live') {
+      fetchLiveData();
+      const interval = setInterval(fetchLiveData, 15000);
+      return () => clearInterval(interval);
+    }
+  }, [tradingMode]);
 
   const fetchPositions = async () => {
     try {
@@ -360,8 +922,24 @@ export default function TradingDashboard() {
         setPositions(data.data);
       }
       fetchRiskMetrics();
+      fetchTradeHistory();
     } catch (error) {
       console.error('Error fetching positions:', error);
+    }
+  };
+
+  const fetchTradeHistory = async () => {
+    try {
+      const [histRes, realRes] = await Promise.all([
+        fetch('/api/trading/demo?action=history'),
+        fetch('/api/trading/demo?action=realized_trades')
+      ]);
+      const histData = await histRes.json();
+      const realData = await realRes.json();
+      if (histData.success) setTradeHistory(histData.data);
+      if (realData.success) setRealizedTrades(realData.data);
+    } catch (error) {
+      console.error('Error fetching trade history:', error);
     }
   };
 
@@ -452,10 +1030,51 @@ export default function TradingDashboard() {
               <Activity className={`h-3 w-3 ${connected ? 'animate-pulse' : ''}`} />
               {connected ? 'Connected' : 'Disconnected'}
             </Badge>
-            <Button variant="outline" size="sm" onClick={resetDemo}>
-              <RefreshCw className="h-4 w-4 mr-1" />
-              Reset Demo
+            {/* Demo / Live Mode Toggle */}
+            <div className="flex items-center rounded-lg border bg-muted p-0.5">
+              <button
+                onClick={() => setTradingMode('demo')}
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                  tradingMode === 'demo'
+                    ? 'bg-green-600 text-white shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                DEMO
+              </button>
+              <button
+                onClick={() => {
+                  const activeAccount = exchangeAccounts.find(a => a.isActive);
+                  if (!activeAccount) {
+                    setShowSettings(true);
+                    return;
+                  }
+                  setTradingMode('live');
+                }}
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                  tradingMode === 'live'
+                    ? 'bg-red-600 text-white shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                LIVE
+              </button>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowSettings(true)}
+              className={tradingMode === 'live' && connectionStatus === 'connected' ? 'border-green-500 text-green-500' : ''}
+            >
+              <Settings className="h-4 w-4 mr-1" />
+              Platforms
             </Button>
+            {tradingMode === 'demo' && (
+              <Button variant="outline" size="sm" onClick={resetDemo}>
+                <RefreshCw className="h-4 w-4 mr-1" />
+                Reset Demo
+              </Button>
+            )}
           </div>
         </div>
 
@@ -638,12 +1257,668 @@ export default function TradingDashboard() {
 
           {/* Signals Tab */}
           <TabsContent value="signals" className="space-y-4">
+            {/* Active Mode Toggle Bar */}
+            <Card className="border-primary/30">
+              <CardContent className="py-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Radio className={`h-5 w-5 ${activeMode ? 'text-primary animate-pulse' : 'text-muted-foreground'}`} />
+                    <div>
+                      <span className="font-semibold text-sm">Active Mode</span>
+                      <span className="text-xs text-muted-foreground ml-2">
+                        {activeScanning
+                          ? `Scanning ${activePairs.length} pairs × ${activeStrategies.length} strategies${activeNewsEnabled ? ' + news' : ''}`
+                          : activeMode ? 'Configured — ready to scan' : 'Auto-scan multiple pairs with multiple strategies'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {activeScanning && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <div className={`w-2 h-2 rounded-full ${scanInProgress ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`} />
+                        {scanInProgress ? 'Scanning...' : 'Idle'}
+                        {lastScanTime > 0 && (
+                          <span>· Last scan {Math.round((Date.now() - lastScanTime) / 1000)}s ago</span>
+                        )}
+                      </div>
+                    )}
+                    {activeMode && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Interval:</span>
+                        <select
+                          value={activeScanInterval}
+                          onChange={(e) => setActiveScanInterval(Number(e.target.value))}
+                          className="text-xs px-2 py-1 rounded border bg-background"
+                          disabled={activeScanning}
+                        >
+                          {SCAN_INTERVALS.map(i => (
+                            <option key={i.value} value={i.value}>{i.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    <Button
+                      variant={activeScanning ? 'destructive' : 'default'}
+                      size="sm"
+                      onClick={() => {
+                        if (activeScanning) {
+                          setActiveScanning(false);
+                        } else {
+                          setActiveMode(true);
+                          setActiveShowConfig(false);
+                          setActiveScanning(true);
+                        }
+                      }}
+                    >
+                      {activeScanning ? (
+                        <><Square className="h-3 w-3 mr-1" /> Stop</>
+                      ) : (
+                        <><Radio className="h-3 w-3 mr-1" /> Start Scanning</>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Active Mode Config Panel */}
+            {activeMode && activeShowConfig && (
+              <Card className="border-dashed">
+                <CardHeader className="py-3">
+                  <CardTitle className="text-sm">Active Mode Configuration</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Pair Selector */}
+                  <div>
+                    <div className="text-xs font-medium text-muted-foreground mb-2">Trading Pairs (click to toggle)</div>
+                    <div className="flex flex-wrap gap-2">
+                      {ALL_SYMBOLS.map(pair => (
+                        <Badge
+                          key={pair}
+                          variant={activePairs.includes(pair) ? 'default' : 'outline'}
+                          className="cursor-pointer"
+                          onClick={() => toggleActivePair(pair)}
+                        >
+                          {pair.replace('USDT', '')}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Strategy Selector */}
+                  <div>
+                    <div className="text-xs font-medium text-muted-foreground mb-2">Strategies (click to toggle)</div>
+                    <div className="flex flex-wrap gap-2">
+                      {STRATEGY_OPTIONS.map(s => (
+                        <Badge
+                          key={s.value}
+                          variant={activeStrategies.includes(s.value) ? 'default' : 'outline'}
+                          className="cursor-pointer"
+                          onClick={() => toggleActiveStrategy(s.value)}
+                          title={s.desc}
+                        >
+                          {s.label}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                  {/* News Signals Toggle */}
+                  <div className="flex items-center gap-3">
+                    <Button
+                      variant={activeNewsEnabled ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setActiveNewsEnabled(!activeNewsEnabled)}
+                    >
+                      <NewspaperIcon className="h-3 w-3 mr-1" />
+                      News Signals: {activeNewsEnabled ? 'ON' : 'OFF'}
+                    </Button>
+                    <span className="text-xs text-muted-foreground">Generate signals from breaking/high-impact news events</span>
+                  </div>
+                  {/* Start Button */}
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      onClick={() => {
+                        setActiveShowConfig(false);
+                        setActiveScanning(true);
+                      }}
+                      disabled={activePairs.length === 0 || activeStrategies.length === 0}
+                    >
+                      <Radio className="h-4 w-4 mr-1" />
+                      Start Scanning ({activePairs.length} pairs × {activeStrategies.length} strategies)
+                    </Button>
+                    <Button variant="ghost" onClick={() => setActiveMode(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Active Mode Live Signal Feed */}
+            {activeMode && activeScanSignals.length > 0 && (
+              <Card>
+                <CardHeader className="py-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ScanSearch className="h-4 w-4 text-primary" />
+                      <CardTitle className="text-sm">Live Scan Feed</CardTitle>
+                      <Badge variant="secondary">{activeScanSignals.length} signals</Badge>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => setActiveScanSignals([])}>
+                      <X className="h-3 w-3 mr-1" /> Clear
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[600px]">
+                    <div className="space-y-4">
+                      {activeScanSignals.map((as) => (
+                        <Card key={as.signal.id} className={`p-4 space-y-4 ${as.scannedAt && Date.now() - new Date(as.scannedAt).getTime() < 5000 ? 'ring-1 ring-primary/50' : ''}`}>
+                          {/* === HEADER === */}
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              <Badge
+                                variant={as.signal.action === 'BUY' ? 'default' : as.signal.action === 'SELL' ? 'destructive' : 'secondary'}
+                                className="text-lg px-4 py-1.5 font-bold"
+                              >
+                                {as.signal.action === 'BUY' ? <ArrowUpRight className="h-4 w-4 mr-1" /> : as.signal.action === 'SELL' ? <ArrowDownRight className="h-4 w-4 mr-1" /> : null}
+                                {as.signal.action}
+                              </Badge>
+                              <div>
+                                <div className="font-bold text-lg">{as.signal.symbol}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  Confidence: {(as.signal.confidence * 100).toFixed(0)}% &middot; Quality: {as.signal.rating}/100
+                                </div>
+                              </div>
+                              <Badge variant="outline" className="text-xs">
+                                {as.strategyName === 'NEWS' ? (
+                                  <><NewspaperIcon className="h-3 w-3 mr-1" /> NEWS</>
+                                ) : (
+                                  <><Brain className="h-3 w-3 mr-1" /> {as.strategyName}</>
+                                )}
+                              </Badge>
+                            </div>
+                            <div className="text-right flex items-center gap-3">
+                              {as.details && (
+                                <div className="text-right">
+                                  <div className="text-xs text-muted-foreground">Current Price</div>
+                                  <div className="font-mono font-bold text-lg">
+                                    ${as.details.currentPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                  </div>
+                                </div>
+                              )}
+                              <div className="text-xs text-muted-foreground">
+                                {as.scannedAt ? new Date(as.scannedAt).toLocaleTimeString() : ''}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* News signal extras */}
+                          {as.signalType === 'NEWS' && as.indicators && (
+                            <div className="flex flex-wrap gap-1">
+                              {as.indicators.topicKeywords?.slice(0, 4).map((kw, i) => (
+                                <Badge key={i} variant="secondary" className="text-[10px]">{kw}</Badge>
+                              ))}
+                              <Badge variant="outline" className="text-[10px]">
+                                {as.indicators.articleCount || 0} articles &middot; {as.indicators.highImpactCount || 0} high-impact
+                              </Badge>
+                              {as.sourceArticle && (
+                                <span className="text-xs text-muted-foreground italic">{as.sourceArticle}</span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* === FULL PROFESSIONAL SIGNAL DETAILS === */}
+                          {as.details && (
+                            <div className="space-y-4">
+                              <Separator />
+
+                              {/* Row: Entry + SL + TP + R:R + Leverage + Time */}
+                              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                                {/* Entry Zone */}
+                                <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                                  <div className="flex items-center gap-1 text-xs text-blue-400 mb-1">
+                                    <Crosshair className="h-3 w-3" /> Entry Zone
+                                  </div>
+                                  <div className="font-mono font-semibold text-sm">
+                                    ${as.details.entryZone.low.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">to</div>
+                                  <div className="font-mono font-semibold text-sm">
+                                    ${as.details.entryZone.high.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                  </div>
+                                  <Badge variant="outline" className="text-[10px] mt-1">{as.details.entryZone.strategy}</Badge>
+                                </div>
+
+                                {/* Stop Loss */}
+                                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                                  <div className="flex items-center gap-1 text-xs text-red-400 mb-1">
+                                    <ShieldAlert className="h-3 w-3" /> Stop Loss
+                                  </div>
+                                  <div className="font-mono font-semibold text-sm text-red-400">
+                                    ${as.details.stopLoss.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                  </div>
+                                  <div className="text-xs text-red-300">
+                                    {as.details.stopLoss.percentFromEntry >= 0 ? '+' : ''}{as.details.stopLoss.percentFromEntry.toFixed(1)}%
+                                  </div>
+                                  <div className="text-[10px] text-muted-foreground mt-1">{as.details.stopLoss.type}</div>
+                                </div>
+
+                                {/* TP Levels */}
+                                <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                                  <div className="flex items-center gap-1 text-xs text-green-400 mb-1">
+                                    <Target className="h-3 w-3" /> Take Profits
+                                  </div>
+                                  {as.details.takeProfitLevels.map((tp) => (
+                                    <div key={tp.level} className="flex justify-between text-[11px]">
+                                      <span className="text-green-300">TP{tp.level}</span>
+                                      <span className="font-mono">
+                                        ${tp.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                        <span className="text-green-400 ml-1">({tp.percentFromEntry >= 0 ? '+' : ''}{tp.percentFromEntry.toFixed(1)}%)</span>
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+
+                                {/* Risk:Reward */}
+                                <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                                  <div className="flex items-center gap-1 text-xs text-purple-400 mb-1">
+                                    <Activity className="h-3 w-3" /> Risk : Reward
+                                  </div>
+                                  <div className="font-bold text-lg text-purple-300">
+                                    1 : {as.details.riskRewardRatio.toFixed(1)}
+                                  </div>
+                                  <div className="text-[10px] text-muted-foreground mt-1">
+                                    {as.details.riskRewardRatio >= 2 ? 'Favorable' : as.details.riskRewardRatio >= 1 ? 'Moderate' : 'Unfavorable'}
+                                  </div>
+                                </div>
+
+                                {/* Leverage */}
+                                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                                  <div className="flex items-center gap-1 text-xs text-amber-400 mb-1">
+                                    <Zap className="h-3 w-3" /> Leverage
+                                  </div>
+                                  <div className="font-bold text-lg text-amber-300">
+                                    {as.details.leverage.min}x - {as.details.leverage.max}x
+                                  </div>
+                                  <div className="text-[10px] text-muted-foreground mt-1">
+                                    Rec: {as.details.leverage.recommended}x
+                                  </div>
+                                </div>
+
+                                {/* Time Horizon */}
+                                <div className="p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+                                  <div className="flex items-center gap-1 text-xs text-cyan-400 mb-1">
+                                    <Timer className="h-3 w-3" /> Time Horizon
+                                  </div>
+                                  <div className="font-bold text-sm text-cyan-300">
+                                    {as.details.timeHorizon}
+                                  </div>
+                                  <div className="text-[10px] text-muted-foreground mt-1">
+                                    {as.details.volatility.label} vol
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* TP position sizing guide */}
+                              <div className="flex gap-2">
+                                {as.details.takeProfitLevels.map((tp) => (
+                                  <div key={tp.level} className="flex-1 p-2 rounded border text-center text-xs">
+                                    <div className="text-muted-foreground">TP{tp.level} — close {tp.positionPercent}%</div>
+                                    <div className="text-muted-foreground text-[10px]">{tp.description}</div>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {/* Score bars */}
+                              <div className="grid grid-cols-3 gap-4 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Technical:</span>
+                                  <Progress value={(as.analysis?.technicalAnalysis?.score || 0) * 100} className="h-2 mt-1" />
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Sentiment:</span>
+                                  <Progress value={((as.analysis?.sentimentAnalysis?.overallSentiment || 0) + 1) * 50} className="h-2 mt-1" />
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Fundamental:</span>
+                                  <Progress value={(as.analysis?.fundamentalAnalysis?.score || 0) * 100} className="h-2 mt-1" />
+                                </div>
+                              </div>
+
+                              <Separator />
+
+                              {/* Market Context */}
+                              <div>
+                                <div className="flex items-center gap-2 text-sm font-semibold mb-2">
+                                  <BarChart3 className="h-4 w-4" /> Market Context
+                                </div>
+                                <p className="text-sm text-muted-foreground">{as.details.marketContext}</p>
+                              </div>
+
+                              {/* Price Action */}
+                              <div>
+                                <div className="flex items-center gap-2 text-sm font-semibold mb-2">
+                                  <CandlestickChart className="h-4 w-4" /> Price Action
+                                </div>
+                                <ul className="space-y-1">
+                                  {as.details.priceActionNotes.map((note, i) => (
+                                    <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                                      <span className="text-primary mt-0.5">&#8226;</span> {note}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+
+                              {/* Indicator Summary */}
+                              <div>
+                                <div className="flex items-center gap-2 text-sm font-semibold mb-2">
+                                  <Layers className="h-4 w-4" /> Indicators
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                  {as.details.indicatorSummary.map((ind, i) => (
+                                    <div key={i} className="p-2 rounded border text-xs">
+                                      <div className="flex justify-between items-center">
+                                        <span className="font-medium">{ind.name}</span>
+                                        <Badge variant={ind.signal === 'BULLISH' ? 'default' : ind.signal === 'BEARISH' ? 'destructive' : 'secondary'} className="text-[10px]">
+                                          {ind.signal}
+                                        </Badge>
+                                      </div>
+                                      <div className="font-mono text-muted-foreground">{ind.value.toFixed(1)}</div>
+                                      <div className="text-muted-foreground text-[10px]">{ind.note}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Key Levels */}
+                              <div>
+                                <div className="flex items-center gap-2 text-sm font-semibold mb-2">
+                                  <Layers className="h-4 w-4" /> Key Levels
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                  <div>
+                                    <span className="text-green-500">Support:</span>{' '}
+                                    {as.details.keyLevels.supports.length > 0
+                                      ? as.details.keyLevels.supports.map(s => `$${s.toLocaleString(undefined, { maximumFractionDigits: 2 })}`).join(', ')
+                                      : `$${as.details.keyLevels.nearestSupport.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+                                  </div>
+                                  <div>
+                                    <span className="text-red-500">Resistance:</span>{' '}
+                                    {as.details.keyLevels.resistances.length > 0
+                                      ? as.details.keyLevels.resistances.map(r => `$${r.toLocaleString(undefined, { maximumFractionDigits: 2 })}`).join(', ')
+                                      : `$${as.details.keyLevels.nearestResistance.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Pattern Analysis */}
+                              {as.details.patternAnalysis.detected.length > 0 && (
+                                <div>
+                                  <div className="flex items-center gap-2 text-sm font-semibold mb-2">
+                                    <CandlestickChart className="h-4 w-4" /> Pattern Analysis
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {as.details.patternAnalysis.detected.map((p, i) => (
+                                      <Badge key={i} variant="outline">{p}</Badge>
+                                    ))}
+                                    <Badge variant="secondary" className="text-[10px]">
+                                      Reliability: {as.details.patternAnalysis.reliability}
+                                    </Badge>
+                                  </div>
+                                  <div className="text-xs text-muted-foreground mt-1">{as.details.patternAnalysis.summary}</div>
+                                </div>
+                              )}
+
+                              {/* Fundamental Catalysts */}
+                              {as.details.fundamentalCatalysts.length > 0 && (
+                                <div>
+                                  <div className="flex items-center gap-2 text-sm font-semibold mb-2">
+                                    <Newspaper className="h-4 w-4" /> Fundamental Catalysts
+                                  </div>
+                                  <ul className="space-y-1">
+                                    {as.details.fundamentalCatalysts.map((cat, i) => (
+                                      <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                                        <span className="text-amber-500 mt-0.5">&#8226;</span> {cat}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+
+                              {/* AI Reasoning */}
+                              <div>
+                                <div className="flex items-center gap-2 text-sm font-semibold mb-2">
+                                  <Brain className="h-4 w-4" /> AI Reasoning
+                                </div>
+                                <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">{as.signal.reasoning}</p>
+                              </div>
+
+                              {/* Warnings */}
+                              {as.analysis?.warnings && as.analysis.warnings.length > 0 && (
+                                <div className="space-y-1">
+                                  {as.analysis.warnings.map((w, i) => (
+                                    <div key={i} className="flex items-start gap-2 text-xs text-amber-600 bg-amber-500/10 p-2 rounded">
+                                      <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" /> {w}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Trade Actions */}
+                          <div className="flex gap-2">
+                            {as.signal.action !== 'HOLD' && (
+                              <>
+                                {expandedOrderId !== as.signal.id ? (
+                                  <Button size="sm" variant="default" className="h-7 text-xs"
+                                    onClick={() => openOrderPanel(as.signal.id, as.details, as.signal.action, as.signal.symbol)}
+                                  >
+                                    <Crosshair className="h-3 w-3 mr-1" /> Open Order Panel
+                                  </Button>
+                                ) : (
+                                  <Button size="sm" variant="outline" className="h-7 text-xs"
+                                    onClick={() => setExpandedOrderId(null)}
+                                  >
+                                    <ChevronUp className="h-3 w-3 mr-1" /> Close Panel
+                                  </Button>
+                                )}
+                              </>
+                            )}
+                            <Button size="sm" variant="ghost" className="h-7 text-xs"
+                              onClick={() => setActiveScanSignals(prev => prev.filter(s => s.signal.id !== as.signal.id))}
+                            >
+                              <X className="h-3 w-3 mr-1" /> Dismiss
+                            </Button>
+                          </div>
+
+                          {/* Trade Order Panel */}
+                          {expandedOrderId === as.signal.id && (
+                            <div className="mt-3 p-3 rounded-lg border bg-card space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-sm font-semibold">
+                                  <Crosshair className="h-4 w-4 text-primary" />
+                                  Trade Order
+                                  <Badge className={`text-[10px] ${tradingMode === 'live' ? 'bg-red-600' : 'bg-green-600'}`}>
+                                    {tradingMode.toUpperCase()}
+                                  </Badge>
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  Balance: ${(tradingMode === 'live' && liveBalance ? liveBalance.totalEquity : portfolio.totalValue).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                <div>
+                                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Symbol</label>
+                                  <div className="text-sm font-bold mt-0.5">{orderForm.symbol}</div>
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Direction</label>
+                                  <div className="flex gap-1 mt-0.5">
+                                    <button onClick={() => setOrderForm(p => ({ ...p, side: 'BUY' }))}
+                                      className={`flex-1 text-xs py-1 rounded font-semibold transition-colors ${orderForm.side === 'BUY' ? 'bg-green-600 text-white' : 'bg-muted text-muted-foreground'}`}
+                                    >BUY</button>
+                                    <button onClick={() => setOrderForm(p => ({ ...p, side: 'SELL' }))}
+                                      className={`flex-1 text-xs py-1 rounded font-semibold transition-colors ${orderForm.side === 'SELL' ? 'bg-red-600 text-white' : 'bg-muted text-muted-foreground'}`}
+                                    >SELL</button>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Order Type</label>
+                                  <div className="flex gap-1 mt-0.5">
+                                    <button onClick={() => setOrderForm(p => ({ ...p, orderType: 'MARKET' }))}
+                                      className={`flex-1 text-xs py-1 rounded font-semibold transition-colors ${orderForm.orderType === 'MARKET' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+                                    >Market</button>
+                                    <button onClick={() => setOrderForm(p => ({ ...p, orderType: 'LIMIT' }))}
+                                      className={`flex-1 text-xs py-1 rounded font-semibold transition-colors ${orderForm.orderType === 'LIMIT' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+                                    >Limit</button>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Leverage</label>
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    <input type="range" min="1" max="100" value={orderForm.leverage}
+                                      onChange={e => setOrderForm(p => ({ ...p, leverage: parseInt(e.target.value) }))}
+                                      className="flex-1 h-1 accent-primary" />
+                                    <span className="text-xs font-mono w-8 text-right">{orderForm.leverage}x</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                <div>
+                                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Entry Price</label>
+                                  <Input type="number" step="any" className="h-7 text-xs font-mono mt-0.5"
+                                    value={orderForm.entryPrice || ''}
+                                    onChange={e => setOrderForm(p => ({ ...p, entryPrice: parseFloat(e.target.value) || 0 }))}
+                                    disabled={orderForm.orderType === 'MARKET'}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Stop Loss</label>
+                                  <Input type="number" step="any" className="h-7 text-xs font-mono mt-0.5 text-red-400"
+                                    value={orderForm.stopLoss || ''}
+                                    onChange={e => updateOrderStopLoss(parseFloat(e.target.value) || 0)}
+                                    placeholder="SL price"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Take Profit</label>
+                                  <Input type="number" step="any" className="h-7 text-xs font-mono mt-0.5 text-green-400"
+                                    value={orderForm.takeProfit || ''}
+                                    onChange={e => setOrderForm(p => ({ ...p, takeProfit: parseFloat(e.target.value) || 0 }))}
+                                    placeholder="TP price"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Quantity</label>
+                                  <Input type="number" step="any" className="h-7 text-xs font-mono mt-0.5"
+                                    value={orderForm.quantity || ''}
+                                    onChange={e => updateOrderQuantity(parseFloat(e.target.value) || 0)}
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Risk Management */}
+                              <div className="rounded-lg border p-2.5 bg-muted/30 space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-semibold text-muted-foreground">Risk Management</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    Risk: <span className={`font-bold ${orderForm.riskPercent > 3 ? 'text-red-500' : orderForm.riskPercent > 1 ? 'text-amber-500' : 'text-green-500'}`}>
+                                      ${((tradingMode === 'live' && liveBalance ? liveBalance.totalEquity : portfolio.totalValue) * orderForm.riskPercent / 100).toFixed(2)}
+                                    </span> ({orderForm.riskPercent.toFixed(2)}%)
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <input type="range" min="0.1" max="10" step="0.1" value={orderForm.riskPercent}
+                                    onChange={e => updateOrderRisk(parseFloat(e.target.value))}
+                                    className="flex-1 h-1 accent-primary" />
+                                  <div className="flex gap-1">
+                                    {[0.5, 1, 2, 3, 5].map(pct => (
+                                      <button key={pct} onClick={() => updateOrderRisk(pct)}
+                                        className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${
+                                          Math.abs(orderForm.riskPercent - pct) < 0.15
+                                            ? 'bg-primary text-primary-foreground'
+                                            : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+                                        }`}
+                                      >{pct}%</button>
+                                    ))}
+                                  </div>
+                                </div>
+                                {/* TP Level selector */}
+                                {as.details?.takeProfitLevels && as.details.takeProfitLevels.length > 1 && (
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-[10px] text-muted-foreground">TP Level:</span>
+                                    {as.details.takeProfitLevels.map((tp, i) => (
+                                      <button key={i} onClick={() => setOrderForm(p => ({
+                                        ...p, takeProfit: tp.price, takeProfitLevel: i + 1
+                                      }))}
+                                        className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${
+                                          orderForm.takeProfitLevel === i + 1
+                                            ? 'bg-green-600 text-white'
+                                            : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+                                        }`}
+                                      >TP{tp.level} (+{tp.percentFromEntry.toFixed(1)}%)</button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Order Summary */}
+                              <div className="flex items-center justify-between p-2 rounded bg-muted/50 text-xs">
+                                <div className="space-y-0.5">
+                                  <div className="text-muted-foreground">Position Size: <span className="font-mono font-bold text-foreground">${(orderForm.quantity * orderForm.entryPrice * orderForm.leverage).toFixed(2)}</span></div>
+                                  <div className="text-muted-foreground">Margin Required: <span className="font-mono font-bold text-foreground">${(orderForm.quantity * orderForm.entryPrice).toFixed(2)}</span></div>
+                                </div>
+                                <div className="text-right space-y-0.5">
+                                  <div className="text-muted-foreground">SL Distance: <span className="font-mono text-red-400">
+                                    {orderForm.entryPrice > 0 && orderForm.stopLoss > 0
+                                      ? `${((Math.abs(orderForm.entryPrice - orderForm.stopLoss) / orderForm.entryPrice) * 100).toFixed(2)}%`
+                                      : '—'}
+                                  </span></div>
+                                  <div className="text-muted-foreground">R:R: <span className="font-mono text-green-400">
+                                    {orderForm.entryPrice > 0 && orderForm.stopLoss > 0 && orderForm.takeProfit > 0
+                                      ? `${(Math.abs(orderForm.takeProfit - orderForm.entryPrice) / Math.abs(orderForm.entryPrice - orderForm.stopLoss)).toFixed(1)}:1`
+                                      : '—'}
+                                  </span></div>
+                                </div>
+                              </div>
+
+                              <Button
+                                className="w-full h-8"
+                                variant={orderForm.side === 'BUY' ? 'default' : 'destructive'}
+                                disabled={orderSubmitting || orderForm.quantity <= 0 || orderForm.entryPrice <= 0}
+                                onClick={submitOrder}
+                              >
+                                {orderSubmitting ? (
+                                  <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Submitting...</>
+                                ) : (
+                                  <><Play className="h-3 w-3 mr-1" />
+                                    {orderForm.side === 'BUY' ? 'BUY' : 'SELL'} {orderForm.symbol}
+                                    {orderForm.orderType === 'LIMIT' && ` @ $${orderForm.entryPrice}`}
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          )}
+                        </Card>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Manual Signal Generator */}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle>AI Trading Signals</CardTitle>
-                    <CardDescription>AI-generated signals with quality scoring</CardDescription>
+                    <CardDescription>
+                      {activeMode ? 'Manual signal generation (Active Mode scanning above)' : 'AI-generated signals with quality scoring'}
+                    </CardDescription>
                   </div>
                   <div className="flex gap-2">
                     <select
@@ -667,88 +1942,502 @@ export default function TradingDashboard() {
                 </div>
               </CardHeader>
               <CardContent>
-                <ScrollArea className="h-[400px]">
+                <ScrollArea className="h-[600px]">
                   {signals.length === 0 ? (
                     <div className="text-center text-muted-foreground py-8">
                       <Target className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                      <p>No signals yet. Generate one to get started!</p>
+                      <p>No manual signals yet. Generate one above or enable Active Mode for auto-scanning.</p>
                     </div>
                   ) : (
                     <div className="space-y-4">
                       {signals.map((signal) => (
-                        <Card key={signal.id} className="p-4">
+                        <Card key={signal.id} className="p-4 space-y-4">
+                          {/* === HEADER === */}
                           <div className="flex items-start justify-between">
                             <div className="flex items-center gap-3">
                               <Badge
                                 variant={signal.action === 'BUY' ? 'default' : signal.action === 'SELL' ? 'destructive' : 'secondary'}
-                                className="text-lg px-3 py-1"
+                                className="text-lg px-4 py-1.5 font-bold"
                               >
                                 {signal.action === 'BUY' ? (
-                                  <TrendingUp className="h-4 w-4 mr-1" />
+                                  <ArrowUpRight className="h-4 w-4 mr-1" />
                                 ) : signal.action === 'SELL' ? (
-                                  <TrendingDown className="h-4 w-4 mr-1" />
+                                  <ArrowDownRight className="h-4 w-4 mr-1" />
                                 ) : null}
                                 {signal.action}
                               </Badge>
                               <div>
-                                <div className="font-semibold">{signal.symbol}</div>
-                                <div className="text-sm text-muted-foreground">
-                                  Confidence: {(signal.confidence * 100).toFixed(0)}% | Quality: {signal.rating}
+                                <div className="font-bold text-lg">{signal.symbol}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  Confidence: {(signal.confidence * 100).toFixed(0)}% &middot; Quality: {signal.rating}/100
                                 </div>
                               </div>
                             </div>
-                            <div className="text-right flex items-center gap-2">
-                              {/* Signal Quality Meter */}
-                              <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
-                                <div 
-                                  className={`h-full rounded-full ${
-                                    signal.rating >= 70 ? 'bg-green-500' : signal.rating >= 40 ? 'bg-yellow-500' : 'bg-red-500'
-                                  }`}
-                                  style={{ width: `${signal.rating}%` }}
-                                />
-                              </div>
-                              <div className="text-sm text-muted-foreground">
+                            <div className="text-right flex items-center gap-3">
+                              {signal.details && (
+                                <div className="text-right">
+                                  <div className="text-xs text-muted-foreground">Current Price</div>
+                                  <div className="font-mono font-bold text-lg">
+                                    ${signal.details.currentPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                  </div>
+                                </div>
+                              )}
+                              <div className="text-xs text-muted-foreground">
                                 {new Date(signal.createdAt).toLocaleString()}
                               </div>
                             </div>
                           </div>
-                          
-                          <Separator className="my-3" />
-                          
-                          <p className="text-sm mb-3">{signal.reasoning}</p>
-                          
-                          <div className="grid grid-cols-3 gap-4 text-sm">
-                            <div>
-                              <span className="text-muted-foreground">Technical:</span>
-                              <Progress value={(signal.technicalScore || 0) * 100} className="h-2 mt-1" />
+
+                          {/* === PROFESSIONAL SIGNAL DETAILS === */}
+                          {signal.details && (
+                            <div className="space-y-4">
+                              <Separator />
+
+                              {/* Row: Entry + SL + TP + R:R + Leverage + Time */}
+                              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                                {/* Entry Zone */}
+                                <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                                  <div className="flex items-center gap-1 text-xs text-blue-400 mb-1">
+                                    <Crosshair className="h-3 w-3" /> Entry Zone
+                                  </div>
+                                  <div className="font-mono font-semibold text-sm">
+                                    ${signal.details.entryZone.low.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">to</div>
+                                  <div className="font-mono font-semibold text-sm">
+                                    ${signal.details.entryZone.high.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                  </div>
+                                  <Badge variant="outline" className="text-[10px] mt-1">{signal.details.entryZone.strategy}</Badge>
+                                </div>
+
+                                {/* Stop Loss */}
+                                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                                  <div className="flex items-center gap-1 text-xs text-red-400 mb-1">
+                                    <ShieldAlert className="h-3 w-3" /> Stop Loss
+                                  </div>
+                                  <div className="font-mono font-semibold text-sm text-red-400">
+                                    ${signal.details.stopLoss.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                  </div>
+                                  <div className="text-xs text-red-300">
+                                    {signal.details.stopLoss.percentFromEntry >= 0 ? '+' : ''}{signal.details.stopLoss.percentFromEntry.toFixed(1)}%
+                                  </div>
+                                  <div className="text-[10px] text-muted-foreground mt-1">{signal.details.stopLoss.type}</div>
+                                </div>
+
+                                {/* TP Levels */}
+                                <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                                  <div className="flex items-center gap-1 text-xs text-green-400 mb-1">
+                                    <Target className="h-3 w-3" /> Take Profits
+                                  </div>
+                                  {signal.details.takeProfitLevels.map((tp) => (
+                                    <div key={tp.level} className="flex justify-between text-[11px]">
+                                      <span className="text-green-300">TP{tp.level}</span>
+                                      <span className="font-mono">
+                                        ${tp.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                        <span className="text-green-400 ml-1">({tp.percentFromEntry >= 0 ? '+' : ''}{tp.percentFromEntry.toFixed(1)}%)</span>
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+
+                                {/* Risk:Reward */}
+                                <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                                  <div className="flex items-center gap-1 text-xs text-purple-400 mb-1">
+                                    <Activity className="h-3 w-3" /> Risk : Reward
+                                  </div>
+                                  <div className="font-bold text-lg text-purple-300">
+                                    1 : {signal.details.riskRewardRatio.toFixed(1)}
+                                  </div>
+                                  <div className="text-[10px] text-muted-foreground mt-1">
+                                    {signal.details.riskRewardRatio >= 2 ? 'Favorable' : signal.details.riskRewardRatio >= 1 ? 'Moderate' : 'Unfavorable'}
+                                  </div>
+                                </div>
+
+                                {/* Leverage */}
+                                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                                  <div className="flex items-center gap-1 text-xs text-amber-400 mb-1">
+                                    <Zap className="h-3 w-3" /> Leverage
+                                  </div>
+                                  <div className="font-bold text-lg text-amber-300">
+                                    {signal.details.leverage.min}x - {signal.details.leverage.max}x
+                                  </div>
+                                  <div className="text-[10px] text-muted-foreground mt-1">
+                                    Rec: {signal.details.leverage.recommended}x
+                                  </div>
+                                </div>
+
+                                {/* Time Horizon */}
+                                <div className="p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+                                  <div className="flex items-center gap-1 text-xs text-cyan-400 mb-1">
+                                    <Timer className="h-3 w-3" /> Time Horizon
+                                  </div>
+                                  <div className="font-bold text-sm text-cyan-300">
+                                    {signal.details.timeHorizon}
+                                  </div>
+                                  <div className="text-[10px] text-muted-foreground mt-1">
+                                    {signal.details.volatility.label} vol
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* TP position sizing guide */}
+                              <div className="flex gap-2">
+                                {signal.details.takeProfitLevels.map((tp) => (
+                                  <div key={tp.level} className="flex-1 p-2 rounded border text-center text-xs">
+                                    <div className="text-muted-foreground">TP{tp.level} — close {tp.positionPercent}%</div>
+                                    <div className="text-muted-foreground text-[10px]">{tp.description}</div>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {/* Score bars */}
+                              <div className="grid grid-cols-3 gap-4 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Technical:</span>
+                                  <Progress value={(signal.analysis?.technicalAnalysis?.score || 0) * 100} className="h-2 mt-1" />
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Sentiment:</span>
+                                  <Progress value={((signal.analysis?.sentimentAnalysis?.overallSentiment || 0) + 1) * 50} className="h-2 mt-1" />
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Fundamental:</span>
+                                  <Progress value={(signal.analysis?.fundamentalAnalysis?.score || 0) * 100} className="h-2 mt-1" />
+                                </div>
+                              </div>
+
+                              <Separator />
+
+                              {/* Market Context */}
+                              <div>
+                                <div className="flex items-center gap-2 text-sm font-semibold mb-2">
+                                  <BarChart3 className="h-4 w-4" /> Market Context
+                                </div>
+                                <p className="text-sm text-muted-foreground">{signal.details.marketContext}</p>
+                              </div>
+
+                              {/* Price Action */}
+                              <div>
+                                <div className="flex items-center gap-2 text-sm font-semibold mb-2">
+                                  <CandlestickChart className="h-4 w-4" /> Price Action
+                                </div>
+                                <ul className="space-y-1">
+                                  {signal.details.priceActionNotes.map((note, i) => (
+                                    <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                                      <span className="text-primary mt-0.5">&#8226;</span> {note}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+
+                              {/* Indicator Summary */}
+                              <div>
+                                <div className="flex items-center gap-2 text-sm font-semibold mb-2">
+                                  <Layers className="h-4 w-4" /> Indicators
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                  {signal.details.indicatorSummary.map((ind, i) => (
+                                    <div key={i} className="p-2 rounded border text-xs">
+                                      <div className="flex justify-between items-center">
+                                        <span className="font-medium">{ind.name}</span>
+                                        <Badge variant={ind.signal === 'BULLISH' ? 'default' : ind.signal === 'BEARISH' ? 'destructive' : 'secondary'} className="text-[10px]">
+                                          {ind.signal}
+                                        </Badge>
+                                      </div>
+                                      <div className="font-mono text-muted-foreground">{ind.value.toFixed(1)}</div>
+                                      <div className="text-muted-foreground text-[10px]">{ind.note}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Key Levels */}
+                              <div>
+                                <div className="flex items-center gap-2 text-sm font-semibold mb-2">
+                                  <Layers className="h-4 w-4" /> Key Levels
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                  <div>
+                                    <span className="text-green-500">Support:</span>{' '}
+                                    {signal.details.keyLevels.supports.length > 0
+                                      ? signal.details.keyLevels.supports.map(s => `$${s.toLocaleString(undefined, { maximumFractionDigits: 2 })}`).join(', ')
+                                      : `$${signal.details.keyLevels.nearestSupport.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+                                  </div>
+                                  <div>
+                                    <span className="text-red-500">Resistance:</span>{' '}
+                                    {signal.details.keyLevels.resistances.length > 0
+                                      ? signal.details.keyLevels.resistances.map(r => `$${r.toLocaleString(undefined, { maximumFractionDigits: 2 })}`).join(', ')
+                                      : `$${signal.details.keyLevels.nearestResistance.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Pattern Analysis */}
+                              {signal.details.patternAnalysis.detected.length > 0 && (
+                                <div>
+                                  <div className="flex items-center gap-2 text-sm font-semibold mb-2">
+                                    <CandlestickChart className="h-4 w-4" /> Pattern Analysis
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {signal.details.patternAnalysis.detected.map((p, i) => (
+                                      <Badge key={i} variant="outline">{p}</Badge>
+                                    ))}
+                                    <Badge variant="secondary" className="text-[10px]">
+                                      Reliability: {signal.details.patternAnalysis.reliability}
+                                    </Badge>
+                                  </div>
+                                  <div className="text-xs text-muted-foreground mt-1">{signal.details.patternAnalysis.summary}</div>
+                                </div>
+                              )}
+
+                              {/* Fundamental Catalysts */}
+                              <div>
+                                <div className="flex items-center gap-2 text-sm font-semibold mb-2">
+                                  <Newspaper className="h-4 w-4" /> Fundamental Catalysts
+                                </div>
+                                <ul className="space-y-1">
+                                  {signal.details.fundamentalCatalysts.map((cat, i) => (
+                                    <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                                      <span className="text-amber-500 mt-0.5">&#8226;</span> {cat}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+
+                              {/* Reasoning */}
+                              <div>
+                                <div className="flex items-center gap-2 text-sm font-semibold mb-2">
+                                  <Brain className="h-4 w-4" /> AI Reasoning
+                                </div>
+                                <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">{signal.reasoning}</p>
+                              </div>
+
+                              {/* Warnings */}
+                              {signal.analysis?.warnings && signal.analysis.warnings.length > 0 && (
+                                <div className="space-y-1">
+                                  {signal.analysis.warnings.map((w, i) => (
+                                    <div key={i} className="flex items-start gap-2 text-xs text-amber-600 bg-amber-500/10 p-2 rounded">
+                                      <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" /> {w}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                            <div>
-                              <span className="text-muted-foreground">Sentiment:</span>
-                              <Progress value={((signal.sentimentScore || 0) + 1) * 50} className="h-2 mt-1" />
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">Fundamental:</span>
-                              <Progress value={(signal.fundamentalScore || 0) * 100} className="h-2 mt-1" />
-                            </div>
+                          )}
+
+                          {/* Legacy display for signals without details */}
+                          {!signal.details && (
+                            <>
+                              <Separator className="my-3" />
+                              <p className="text-sm mb-3">{signal.reasoning}</p>
+                              <div className="grid grid-cols-3 gap-4 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Technical:</span>
+                                  <Progress value={(signal.analysis?.technicalAnalysis?.score || 0) * 100} className="h-2 mt-1" />
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Sentiment:</span>
+                                  <Progress value={((signal.analysis?.sentimentAnalysis?.overallSentiment || 0) + 1) * 50} className="h-2 mt-1" />
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Fundamental:</span>
+                                  <Progress value={(signal.analysis?.fundamentalAnalysis?.score || 0) * 100} className="h-2 mt-1" />
+                                </div>
+                              </div>
+                            </>
+                          )}
+
+                          {/* Action buttons */}
+                          <div className="mt-3 flex gap-2">
+                            {signal.action !== 'HOLD' && (
+                              <>
+                                {expandedOrderId !== signal.id ? (
+                                  <Button size="sm" variant="default"
+                                    onClick={() => openOrderPanel(signal.id, signal.details, signal.action, signal.symbol)}
+                                  >
+                                    <Crosshair className="h-3 w-3 mr-1" /> Open Order Panel
+                                  </Button>
+                                ) : (
+                                  <Button size="sm" variant="outline"
+                                    onClick={() => setExpandedOrderId(null)}
+                                  >
+                                    <ChevronUp className="h-3 w-3 mr-1" /> Close Panel
+                                  </Button>
+                                )}
+                              </>
+                            )}
+                            <Button size="sm" variant="outline">
+                              <Shield className="h-3 w-3 mr-1" />
+                              Set Alerts
+                            </Button>
                           </div>
 
-                          {signal.action !== 'HOLD' && (
-                            <div className="mt-3 flex gap-2">
+                          {/* Trade Order Panel (manual signals) */}
+                          {expandedOrderId === signal.id && (
+                            <div className="mt-3 p-3 rounded-lg border bg-card space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-sm font-semibold">
+                                  <Crosshair className="h-4 w-4 text-primary" />
+                                  Trade Order
+                                  <Badge className={`text-[10px] ${tradingMode === 'live' ? 'bg-red-600' : 'bg-green-600'}`}>
+                                    {tradingMode.toUpperCase()}
+                                  </Badge>
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  Balance: ${(tradingMode === 'live' && liveBalance ? liveBalance.totalEquity : portfolio.totalValue).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                <div>
+                                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Symbol</label>
+                                  <div className="text-sm font-bold mt-0.5">{orderForm.symbol}</div>
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Direction</label>
+                                  <div className="flex gap-1 mt-0.5">
+                                    <button onClick={() => setOrderForm(p => ({ ...p, side: 'BUY' }))}
+                                      className={`flex-1 text-xs py-1 rounded font-semibold transition-colors ${orderForm.side === 'BUY' ? 'bg-green-600 text-white' : 'bg-muted text-muted-foreground'}`}
+                                    >BUY</button>
+                                    <button onClick={() => setOrderForm(p => ({ ...p, side: 'SELL' }))}
+                                      className={`flex-1 text-xs py-1 rounded font-semibold transition-colors ${orderForm.side === 'SELL' ? 'bg-red-600 text-white' : 'bg-muted text-muted-foreground'}`}
+                                    >SELL</button>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Order Type</label>
+                                  <div className="flex gap-1 mt-0.5">
+                                    <button onClick={() => setOrderForm(p => ({ ...p, orderType: 'MARKET' }))}
+                                      className={`flex-1 text-xs py-1 rounded font-semibold transition-colors ${orderForm.orderType === 'MARKET' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+                                    >Market</button>
+                                    <button onClick={() => setOrderForm(p => ({ ...p, orderType: 'LIMIT' }))}
+                                      className={`flex-1 text-xs py-1 rounded font-semibold transition-colors ${orderForm.orderType === 'LIMIT' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+                                    >Limit</button>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Leverage</label>
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    <input type="range" min="1" max="100" value={orderForm.leverage}
+                                      onChange={e => setOrderForm(p => ({ ...p, leverage: parseInt(e.target.value) }))}
+                                      className="flex-1 h-1 accent-primary" />
+                                    <span className="text-xs font-mono w-8 text-right">{orderForm.leverage}x</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                <div>
+                                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Entry Price</label>
+                                  <Input type="number" step="any" className="h-7 text-xs font-mono mt-0.5"
+                                    value={orderForm.entryPrice || ''}
+                                    onChange={e => setOrderForm(p => ({ ...p, entryPrice: parseFloat(e.target.value) || 0 }))}
+                                    disabled={orderForm.orderType === 'MARKET'}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Stop Loss</label>
+                                  <Input type="number" step="any" className="h-7 text-xs font-mono mt-0.5 text-red-400"
+                                    value={orderForm.stopLoss || ''}
+                                    onChange={e => updateOrderStopLoss(parseFloat(e.target.value) || 0)}
+                                    placeholder="SL price"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Take Profit</label>
+                                  <Input type="number" step="any" className="h-7 text-xs font-mono mt-0.5 text-green-400"
+                                    value={orderForm.takeProfit || ''}
+                                    onChange={e => setOrderForm(p => ({ ...p, takeProfit: parseFloat(e.target.value) || 0 }))}
+                                    placeholder="TP price"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Quantity</label>
+                                  <Input type="number" step="any" className="h-7 text-xs font-mono mt-0.5"
+                                    value={orderForm.quantity || ''}
+                                    onChange={e => updateOrderQuantity(parseFloat(e.target.value) || 0)}
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Risk Management */}
+                              <div className="rounded-lg border p-2.5 bg-muted/30 space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-semibold text-muted-foreground">Risk Management</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    Risk: <span className={`font-bold ${orderForm.riskPercent > 3 ? 'text-red-500' : orderForm.riskPercent > 1 ? 'text-amber-500' : 'text-green-500'}`}>
+                                      ${((tradingMode === 'live' && liveBalance ? liveBalance.totalEquity : portfolio.totalValue) * orderForm.riskPercent / 100).toFixed(2)}
+                                    </span> ({orderForm.riskPercent.toFixed(2)}%)
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <input type="range" min="0.1" max="10" step="0.1" value={orderForm.riskPercent}
+                                    onChange={e => updateOrderRisk(parseFloat(e.target.value))}
+                                    className="flex-1 h-1 accent-primary" />
+                                  <div className="flex gap-1">
+                                    {[0.5, 1, 2, 3, 5].map(pct => (
+                                      <button key={pct} onClick={() => updateOrderRisk(pct)}
+                                        className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${
+                                          Math.abs(orderForm.riskPercent - pct) < 0.15
+                                            ? 'bg-primary text-primary-foreground'
+                                            : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+                                        }`}
+                                      >{pct}%</button>
+                                    ))}
+                                  </div>
+                                </div>
+                                {signal.details?.takeProfitLevels && signal.details.takeProfitLevels.length > 1 && (
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-[10px] text-muted-foreground">TP Level:</span>
+                                    {signal.details.takeProfitLevels.map((tp, i) => (
+                                      <button key={i} onClick={() => setOrderForm(p => ({
+                                        ...p, takeProfit: tp.price, takeProfitLevel: i + 1
+                                      }))}
+                                        className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${
+                                          orderForm.takeProfitLevel === i + 1
+                                            ? 'bg-green-600 text-white'
+                                            : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+                                        }`}
+                                      >TP{tp.level} (+{tp.percentFromEntry.toFixed(1)}%)</button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Order Summary */}
+                              <div className="flex items-center justify-between p-2 rounded bg-muted/50 text-xs">
+                                <div className="space-y-0.5">
+                                  <div className="text-muted-foreground">Position Size: <span className="font-mono font-bold text-foreground">${(orderForm.quantity * orderForm.entryPrice * orderForm.leverage).toFixed(2)}</span></div>
+                                  <div className="text-muted-foreground">Margin Required: <span className="font-mono font-bold text-foreground">${(orderForm.quantity * orderForm.entryPrice).toFixed(2)}</span></div>
+                                </div>
+                                <div className="text-right space-y-0.5">
+                                  <div className="text-muted-foreground">SL Distance: <span className="font-mono text-red-400">
+                                    {orderForm.entryPrice > 0 && orderForm.stopLoss > 0
+                                      ? `${((Math.abs(orderForm.entryPrice - orderForm.stopLoss) / orderForm.entryPrice) * 100).toFixed(2)}%`
+                                      : '—'}
+                                  </span></div>
+                                  <div className="text-muted-foreground">R:R: <span className="font-mono text-green-400">
+                                    {orderForm.entryPrice > 0 && orderForm.stopLoss > 0 && orderForm.takeProfit > 0
+                                      ? `${(Math.abs(orderForm.takeProfit - orderForm.entryPrice) / Math.abs(orderForm.entryPrice - orderForm.stopLoss)).toFixed(1)}:1`
+                                      : '—'}
+                                  </span></div>
+                                </div>
+                              </div>
+
                               <Button
-                                size="sm"
-                                variant="default"
-                                onClick={() => {
-                  if (signal.action !== 'HOLD') {
-                    placeDemoOrder(signal.symbol, signal.action as 'BUY' | 'SELL', 0.01);
-                  }
-                }}
+                                className="w-full h-8"
+                                variant={orderForm.side === 'BUY' ? 'default' : 'destructive'}
+                                disabled={orderSubmitting || orderForm.quantity <= 0 || orderForm.entryPrice <= 0}
+                                onClick={submitOrder}
                               >
-                                <Play className="h-3 w-3 mr-1" />
-                                Execute
-                              </Button>
-                              <Button size="sm" variant="outline">
-                                <Shield className="h-3 w-3 mr-1" />
-                                Set Alerts
+                                {orderSubmitting ? (
+                                  <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Submitting...</>
+                                ) : (
+                                  <><Play className="h-3 w-3 mr-1" />
+                                    {orderForm.side === 'BUY' ? 'BUY' : 'SELL'} {orderForm.symbol}
+                                    {orderForm.orderType === 'LIMIT' && ` @ $${orderForm.entryPrice}`}
+                                  </>
+                                )}
                               </Button>
                             </div>
                           )}
@@ -1097,6 +2786,510 @@ export default function TradingDashboard() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* MT5-Style Open Trades & Trade History */}
+        <div className="mt-6 space-y-4">
+          {/* Terminal Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <BarChart3 className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold">Trade Terminal</h2>
+              <Badge className={`text-xs ${tradingMode === 'live' ? 'bg-red-600' : 'bg-green-600'}`}>
+                {tradingMode.toUpperCase()}
+              </Badge>
+            </div>
+            <div className="flex items-center gap-4 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Balance:</span>
+                <span className="font-semibold">
+                  {tradingMode === 'live' && liveBalance
+                    ? `$${liveBalance.totalEquity.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+                    : `$${portfolio.totalValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+                  }
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Equity:</span>
+                <span className={`font-semibold ${
+                  tradingMode === 'live'
+                    ? 'text-green-500'
+                    : (portfolio.totalValue + portfolio.unrealizedPnL) >= portfolio.totalValue ? 'text-green-500' : 'text-red-500'
+                }`}>
+                  {tradingMode === 'live' && liveBalance
+                    ? `$${liveBalance.totalAvailableBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+                    : `$${(portfolio.totalValue + portfolio.unrealizedPnL).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+                  }
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Free Margin:</span>
+                <span className="font-semibold">
+                  {tradingMode === 'live' && liveBalance
+                    ? `$${liveBalance.totalAvailableBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+                    : `$${portfolio.cashBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+                  }
+                </span>
+              </div>
+              {tradingMode === 'live' && connectionStatus === 'connected' && (
+                <Badge className="text-[10px] bg-green-600">LIVE</Badge>
+              )}
+            </div>
+          </div>
+
+          {/* Summary Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Card className="p-3">
+              <div className="text-xs text-muted-foreground">Open Positions</div>
+              <div className="text-xl font-bold">{tradingMode === 'live' ? livePositions.length : positions.length}</div>
+            </Card>
+            <Card className="p-3">
+              <div className="text-xs text-muted-foreground">Total Unrealized P&L</div>
+              <div className={`text-xl font-bold ${
+                (tradingMode === 'live' ? livePositions : positions).reduce((s, p) => s + (p.unrealizedPnL || 0), 0) >= 0 ? 'text-green-500' : 'text-red-500'
+              }`}>
+                {((tradingMode === 'live' ? livePositions : positions).reduce((s, p) => s + (p.unrealizedPnL || 0), 0) >= 0 ? '+' : '')}
+                ${(tradingMode === 'live' ? livePositions : positions).reduce((s, p) => s + (p.unrealizedPnL || 0), 0).toFixed(2)}
+              </div>
+            </Card>
+            <Card className="p-3">
+              <div className="text-xs text-muted-foreground">Realized P&L</div>
+              <div className={`text-xl font-bold ${portfolio.realizedPnL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                {portfolio.realizedPnL >= 0 ? '+' : ''}${portfolio.realizedPnL.toFixed(2)}
+              </div>
+            </Card>
+            <Card className="p-3">
+              <div className="text-xs text-muted-foreground">Closed Trades</div>
+              <div className="text-xl font-bold">{tradeHistory.filter(t => t.closedAt).length + realizedTrades.length}</div>
+            </Card>
+          </div>
+
+          {/* Open Trades Table */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Target className="h-4 w-4" />
+                  <CardTitle className="text-sm font-semibold">Open Trades</CardTitle>
+                  <span className="text-xs text-muted-foreground">
+                    ({tradingMode === 'live' ? livePositions.length : positions.length})
+                  </span>
+                  <Badge className={`text-[10px] px-1.5 py-0 ${tradingMode === 'live' ? 'bg-red-600' : 'bg-green-600'}`}>
+                    {tradingMode.toUpperCase()}
+                  </Badge>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-xs h-7"
+                  onClick={tradingMode === 'live' ? fetchLiveData : fetchPositions}
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Refresh
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {(tradingMode === 'live' ? livePositions : positions).length === 0 ? (
+                <div className="text-center text-muted-foreground py-10">
+                  <Activity className="h-10 h-10 mx-auto mb-2 opacity-40" />
+                  <p className="text-sm">
+                    {tradingMode === 'live'
+                      ? 'No open live trades'
+                      : 'No open trades'}
+                  </p>
+                  <p className="text-xs mt-1">
+                    {tradingMode === 'live'
+                      ? 'Place a trade from the Signals tab using LIVE mode'
+                      : 'Place a trade from the Signals tab or use the terminal above'}
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground w-16">#</th>
+                        <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Symbol</th>
+                        <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground w-16">Type</th>
+                        <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground w-20">Volume</th>
+                        <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground">Open Price</th>
+                        <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground">Current</th>
+                        <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground">S/L</th>
+                        <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground">T/P</th>
+                        <th className="text-center py-2 px-3 text-xs font-medium text-muted-foreground w-16">Swap</th>
+                        <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground w-28">P&L</th>
+                        <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground w-28">P&L %</th>
+                        <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground w-16">Time</th>
+                        <th className="text-center py-2 px-3 text-xs font-medium text-muted-foreground w-24">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(tradingMode === 'live' ? livePositions : positions).map((pos, idx) => (
+                        <tr key={pos.id} className={`border-b hover:bg-muted/30 transition-colors ${(pos.unrealizedPnL || 0) >= 0 ? 'bg-green-500/[0.03]' : 'bg-red-500/[0.03]'}`}>
+                          <td className="py-2.5 px-3 text-xs text-muted-foreground font-mono">{idx + 1}</td>
+                          <td className="py-2.5 px-3">
+                            <span className="font-semibold">{pos.symbol.replace('USDT', '')}</span>
+                            <span className="text-muted-foreground">/USDT</span>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <Badge variant={pos.side === 'LONG' ? 'default' : 'destructive'} className="text-[10px] px-1.5 py-0">
+                              {pos.side}
+                            </Badge>
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono">{pos.quantity.toFixed(4)}</td>
+                          <td className="py-2.5 px-3 text-right font-mono">${pos.avgEntryPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                          <td className="py-2.5 px-3 text-right font-mono">${(pos.currentPrice || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                          <td className="py-2.5 px-3 text-right font-mono text-red-400">
+                            {pos.stopLoss ? `$${pos.stopLoss.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : <span className="text-muted-foreground">—</span>}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-green-400">
+                            {pos.takeProfit ? `$${pos.takeProfit.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : <span className="text-muted-foreground">—</span>}
+                          </td>
+                          <td className="py-2.5 px-3 text-center text-muted-foreground text-xs font-mono">
+                            {pos.trailingStopActivated ? <span className="text-green-500">●</span> : '—'}
+                          </td>
+                          <td className={`py-2.5 px-3 text-right font-mono font-semibold ${(pos.unrealizedPnL || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                            {(pos.unrealizedPnL || 0) >= 0 ? '+' : ''}${(pos.unrealizedPnL || 0).toFixed(2)}
+                          </td>
+                          <td className={`py-2.5 px-3 text-right font-mono font-semibold ${(pos.unrealizedPnLPercent || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                            {(pos.unrealizedPnLPercent || 0) >= 0 ? '+' : ''}{(pos.unrealizedPnLPercent || 0).toFixed(2)}%
+                          </td>
+                          <td className="py-2.5 px-3 text-xs text-muted-foreground">
+                            {pos.openedAt ? new Date(pos.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 w-6 p-0 text-red-500 hover:text-red-400 hover:bg-red-500/10"
+                                onClick={() => closeTrade(pos.symbol)}
+                                title="Close position"
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                              {tradingMode === 'demo' && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 w-6 p-0 text-muted-foreground hover:bg-muted"
+                                  onClick={() => closePositionPartial(pos.symbol, 50)}
+                                  title="Close 50%"
+                                >
+                                  <Percent className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    {/* Totals Row */}
+                    <tfoot>
+                      <tr className="border-t-2 bg-muted/30 font-semibold">
+                        <td className="py-2.5 px-3" colSpan={9}>
+                          <span className="text-xs text-muted-foreground">TOTAL ({(tradingMode === 'live' ? livePositions : positions).length} positions)</span>
+                        </td>
+                        <td className={`py-2.5 px-3 text-right font-mono ${(tradingMode === 'live' ? livePositions : positions).reduce((s, p) => s + (p.unrealizedPnL || 0), 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                          {(tradingMode === 'live' ? livePositions : positions).reduce((s, p) => s + (p.unrealizedPnL || 0), 0) >= 0 ? '+' : ''}${(tradingMode === 'live' ? livePositions : positions).reduce((s, p) => s + (p.unrealizedPnL || 0), 0).toFixed(2)}
+                        </td>
+                        <td className={`py-2.5 px-3 text-right font-mono ${(tradingMode === 'live' ? livePositions : positions).reduce((s, p) => s + (p.unrealizedPnLPercent || 0), 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                          {((tradingMode === 'live' ? livePositions : positions).reduce((s, p) => s + (p.unrealizedPnLPercent || 0), 0) / Math.max(1, (tradingMode === 'live' ? livePositions : positions).length)).toFixed(2)}%
+                        </td>
+                        <td colSpan={2}></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Trade History Tab */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                <CardTitle className="text-sm font-semibold">Trade History</CardTitle>
+                <span className="text-xs text-muted-foreground">({tradeHistory.length + realizedTrades.length})</span>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {tradeHistory.length === 0 && realizedTrades.length === 0 ? (
+                <div className="text-center text-muted-foreground py-8">
+                  <Clock className="h-10 w-10 mx-auto mb-2 opacity-40" />
+                  <p className="text-sm">No trade history yet</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">#</th>
+                        <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Symbol</th>
+                        <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground w-16">Type</th>
+                        <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground">Volume</th>
+                        <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground">Open Price</th>
+                        <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground">Close Price</th>
+                        <th className="text-center py-2 px-3 text-xs font-medium text-muted-foreground">Status</th>
+                        <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground">P&L</th>
+                        <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground">Fees</th>
+                        <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Closed</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {/* Realized trades */}
+                      {realizedTrades.map((trade, idx) => (
+                        <tr key={`real-${trade.id}`} className={`border-b hover:bg-muted/30 ${trade.netPnL >= 0 ? 'bg-green-500/[0.03]' : 'bg-red-500/[0.03]'}`}>
+                          <td className="py-2.5 px-3 text-xs text-muted-foreground font-mono">{idx + 1}</td>
+                          <td className="py-2.5 px-3">
+                            <span className="font-semibold">{trade.symbol.replace('USDT', '')}</span>
+                            <span className="text-muted-foreground">/USDT</span>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <Badge variant={trade.side === 'LONG' ? 'default' : 'destructive'} className="text-[10px] px-1.5 py-0">
+                              {trade.side}
+                            </Badge>
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono">{trade.quantity.toFixed(4)}</td>
+                          <td className="py-2.5 px-3 text-right font-mono">${trade.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                          <td className="py-2.5 px-3 text-right font-mono">${trade.exitPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                          <td className="py-2.5 px-3 text-center">
+                            <Badge variant="outline" className="text-[10px]">Closed</Badge>
+                          </td>
+                          <td className={`py-2.5 px-3 text-right font-mono font-semibold ${trade.netPnL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                            {trade.netPnL >= 0 ? '+' : ''}${trade.netPnL.toFixed(2)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">${trade.fees.toFixed(4)}</td>
+                          <td className="py-2.5 px-3 text-xs text-muted-foreground">
+                            {trade.closedAt ? new Date(trade.closedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                      {/* Order history (non-realized, i.e. open orders etc.) */}
+                      {tradeHistory.map((trade, idx) => {
+                        if (!trade.closedAt) return null;
+                        return (
+                          <tr key={`hist-${trade.id}`} className={`border-b hover:bg-muted/30 ${(trade.pnl || 0) >= 0 ? 'bg-green-500/[0.03]' : 'bg-red-500/[0.03]'}`}>
+                            <td className="py-2.5 px-3 text-xs text-muted-foreground font-mono">{realizedTrades.length + idx + 1}</td>
+                            <td className="py-2.5 px-3">
+                              <span className="font-semibold">{trade.symbol.replace('USDT', '')}</span>
+                              <span className="text-muted-foreground">/USDT</span>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                {trade.side}
+                              </Badge>
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono">{trade.quantity.toFixed(4)}</td>
+                            <td className="py-2.5 px-3 text-right font-mono">${trade.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 px-3 text-right text-muted-foreground">—</td>
+                            <td className="py-2.5 px-3 text-center">
+                              <Badge variant={trade.status === 'FILLED' ? 'default' : 'secondary'} className="text-[10px]">
+                                {trade.status}
+                              </Badge>
+                            </td>
+                            <td className={`py-2.5 px-3 text-right font-mono ${(trade.pnl || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                              {trade.pnl !== undefined ? `${trade.pnl >= 0 ? '+' : ''}$${trade.pnl.toFixed(2)}` : '—'}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono text-muted-foreground">—</td>
+                            <td className="py-2.5 px-3 text-xs text-muted-foreground">
+                              {trade.closedAt ? new Date(trade.closedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Exchange Account Settings Dialog */}
+        {showSettings && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <Card className="w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto shadow-2xl border-2">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Settings className="h-5 w-5 text-primary" />
+                    <CardTitle>Trading Platforms</CardTitle>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => setShowSettings(false)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <CardDescription>Add your exchange API keys to enable live trading</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Existing Accounts */}
+                {exchangeAccounts.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-muted-foreground">Connected Accounts</div>
+                    {exchangeAccounts.map(account => (
+                      <div key={account.id} className="flex items-center justify-between p-3 rounded-lg border bg-card">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm truncate">{account.name}</span>
+                            <Badge variant="outline" className="text-[10px] uppercase">{account.exchange}</Badge>
+                            <Badge variant={account.testnet ? 'secondary' : 'default'} className="text-[10px]">
+                              {account.testnet ? 'Testnet' : 'Mainnet'}
+                            </Badge>
+                            {account.isActive && (
+                              <Badge className="text-[10px] bg-green-600">Active</Badge>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Key: {account.apiKey} &middot; Secret: {account.apiSecret}
+                          </div>
+                          {account.lastTested && (
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              Last tested: {new Date(account.lastTested).toLocaleString()}
+                              {account.lastError && <span className="text-red-500 ml-1">Error: {account.lastError}</span>}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 ml-2 shrink-0">
+                          {!account.isActive && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-[10px] h-7 px-2"
+                              onClick={() => activateExchangeAccount(account.id)}
+                            >
+                              Activate
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-[10px] h-7 px-2"
+                            onClick={() => testExchangeConnection(account.id)}
+                          >
+                            Test
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-[10px] h-7 px-2 text-red-500 hover:text-red-600"
+                            onClick={() => deleteExchangeAccount(account.id)}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add New Account */}
+                <Separator />
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-medium">
+                      {accountFormMode === 'edit' ? 'Edit Account' : 'Add New Account'}
+                    </div>
+                    {accountFormMode === 'edit' && (
+                      <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => {
+                        setAccountFormMode('add');
+                        setEditingAccountId(null);
+                        setNewAccount({ name: 'Bybit Main', apiKey: '', apiSecret: '', testnet: true });
+                      }}>
+                        Cancel Edit
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-xs text-muted-foreground">Account Name</label>
+                      <Input
+                        placeholder="e.g. Bybit Main Account"
+                        value={newAccount.name}
+                        onChange={e => setNewAccount(prev => ({ ...prev, name: e.target.value }))}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs text-muted-foreground">API Key</label>
+                        <Input
+                          type="password"
+                          placeholder="Enter API Key"
+                          value={newAccount.apiKey}
+                          onChange={e => setNewAccount(prev => ({ ...prev, apiKey: e.target.value }))}
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground">API Secret</label>
+                        <Input
+                          type="password"
+                          placeholder="Enter API Secret"
+                          value={newAccount.apiSecret}
+                          onChange={e => setNewAccount(prev => ({ ...prev, apiSecret: e.target.value }))}
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="testnet-toggle"
+                        checked={newAccount.testnet}
+                        onChange={e => setNewAccount(prev => ({ ...prev, testnet: e.target.checked }))}
+                        className="rounded"
+                      />
+                      <label htmlFor="testnet-toggle" className="text-sm">
+                        Use Testnet (demo keys)
+                        <span className="text-xs text-muted-foreground ml-1">
+                          {newAccount.testnet ? '(recommended for testing)' : '(real funds at risk!)'}
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={saveExchangeAccount}
+                      disabled={!newAccount.name || !newAccount.apiKey || !newAccount.apiSecret}
+                    >
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      {accountFormMode === 'edit' ? 'Update Account' : 'Save Account'}
+                    </Button>
+                    {connectionStatus === 'testing' && (
+                      <span className="text-xs text-muted-foreground animate-pulse">Testing connection...</span>
+                    )}
+                    {connectionStatus === 'connected' && (
+                      <span className="text-xs text-green-500 flex items-center gap-1">
+                        <CheckCircle className="h-3 w-3" /> Connected
+                      </span>
+                    )}
+                    {connectionStatus === 'error' && (
+                      <span className="text-xs text-red-500 flex items-center gap-1">
+                        <XCircle className="h-3 w-3" /> Connection failed
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Warning for mainnet */}
+                {!newAccount.testnet && (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Real Funds Warning</AlertTitle>
+                    <AlertDescription>
+                      You are about to use mainnet with real funds. Make sure you understand the risks. Start with small amounts.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Footer */}
         <footer className="text-center text-sm text-muted-foreground py-4 border-t">

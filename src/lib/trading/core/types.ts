@@ -83,6 +83,16 @@ export enum SentimentLabel {
   VERY_BULLISH = 'VERY_BULLISH'
 }
 
+export enum StrategyType {
+  DEFAULT = 'DEFAULT',
+  MOMENTUM = 'MOMENTUM',
+  BREAKOUT = 'BREAKOUT',
+  MEAN_REVERSION = 'MEAN_REVERSION',
+  VWAP_TWAP = 'VWAP_TWAP'
+}
+
+export type SignalType = 'TECHNICAL' | 'NEWS';
+
 // ==================== INTERFACES ====================
 
 export interface TradingConfig {
@@ -127,12 +137,102 @@ export interface SignalGenerationInput {
   marketData: MarketDataPoint[];
   newsArticles: NewsArticle[];
   additionalContext?: string;
+  strategyName?: StrategyType;
 }
 
 export interface SignalGenerationOutput {
   signal: Omit<Signal, 'id' | 'createdAt' | 'updatedAt'>;
   analysis: SignalAnalysis;
   riskAssessment: RiskAssessment;
+  signalDetails?: SignalDetails;
+}
+
+/**
+ * Professional signal provider-style details
+ * Models the format used by top crypto signal groups
+ */
+export interface SignalDetails {
+  /** Current market price at time of signal */
+  currentPrice: number;
+
+  /** Entry price zone (range rather than single price) */
+  entryZone: {
+    low: number;
+    high: number;
+    strategy: 'LIMIT' | 'MARKET';
+    description: string;
+  };
+
+  /** Multiple take-profit levels with position sizing guidance */
+  takeProfitLevels: Array<{
+    level: number;
+    price: number;
+    percentFromEntry: number;
+    positionPercent: number;
+    description: string;
+  }>;
+
+  /** Stop loss with context */
+  stopLoss: {
+    price: number;
+    percentFromEntry: number;
+    reasoning: string;
+    type: 'HARD' | 'TRAILING';
+  };
+
+  /** Risk-to-reward ratio (e.g., 2.4 means 1:2.4) */
+  riskRewardRatio: number;
+
+  /** Leverage recommendation */
+  leverage: {
+    min: number;
+    max: number;
+    recommended: number;
+    reasoning: string;
+  };
+
+  /** Trade duration recommendation */
+  timeHorizon: 'SCALP' | 'SWING' | 'POSITION';
+  timeHorizonDescription: string;
+
+  /** Volatility assessment */
+  volatility: {
+    value: number;
+    label: 'LOW' | 'MODERATE' | 'HIGH' | 'EXTREME';
+    atrPercent: number;
+  };
+
+  /** Overall market context narrative */
+  marketContext: string;
+
+  /** Price action observations */
+  priceActionNotes: string[];
+
+  /** Fundamental catalysts driving the signal */
+  fundamentalCatalysts: string[];
+
+  /** Key technical levels summary */
+  keyLevels: {
+    supports: number[];
+    resistances: number[];
+    nearestSupport: number;
+    nearestResistance: number;
+  };
+
+  /** Indicator summary with signals */
+  indicatorSummary: Array<{
+    name: string;
+    value: number;
+    signal: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+    note: string;
+  }>;
+
+  /** Pattern analysis summary */
+  patternAnalysis: {
+    detected: string[];
+    reliability: 'LOW' | 'MEDIUM' | 'HIGH';
+    summary: string;
+  };
 }
 
 export interface SignalAnalysis {
@@ -510,4 +610,45 @@ export interface OHLCV {
   low: number;
   close: number;
   volume: number;
+}
+
+// ==================== ACTIVE SCAN TYPES ====================
+
+export interface ActiveScanResult {
+  signal: Omit<Signal, 'id' | 'createdAt' | 'updatedAt'>;
+  analysis: SignalAnalysis;
+  riskAssessment: RiskAssessment;
+  signalDetails?: SignalDetails;
+  strategyName: StrategyType;
+  signalType: SignalType;
+  scannedAt: string;
+}
+
+export interface NewsSignal {
+  symbol: string;
+  action: TradeAction;
+  confidence: number;
+  reasoning: string;
+  sourceArticle: string;
+  sentimentShift: number;
+  importance: number;
+  strategyName: string; // 'NEWS' — not a StrategyType enum value
+  signalType: SignalType;
+  generatedAt: string;
+  indicators: {
+    newsSentiment: number;
+    articleCount: number;
+    highImpactCount: number;
+    topicKeywords: string[];
+  };
+}
+
+// ==================== STRATEGY WEIGHTS ====================
+
+export interface StrategyWeights {
+  technical: number;
+  fundamental: number;
+  sentiment: number;
+  label: string;
+  description: string;
 }
