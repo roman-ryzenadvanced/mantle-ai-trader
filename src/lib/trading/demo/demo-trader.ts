@@ -21,6 +21,7 @@ import {
   Ticker,
   PositionSide
 } from '../core/types';
+import { db } from '@/lib/db';
 
 // ==================== CIRCUIT BREAKER ====================
 
@@ -139,6 +140,7 @@ export class DemoTrader {
   private positionSizeMultiplier: number = 1.0;
   private recoveryWins: number = 0;
   private circuitBreakerConfig: CircuitBreakerConfig;
+  private _persistTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(initialCapital: number = 10000, commissionRates?: Partial<CommissionRates>, circuitBreakerConfig?: Partial<CircuitBreakerConfig>) {
     this.portfolio = {
@@ -162,6 +164,11 @@ export class DemoTrader {
       reducedPositionMultiplier: circuitBreakerConfig?.reducedPositionMultiplier ?? 0.5,
       recoveryStep: circuitBreakerConfig?.recoveryStep ?? 0.25
     };
+
+    // Restore persisted state from DB (async, fire-and-forget)
+    this.restoreFromDB().catch(err => {
+      console.error('DemoTrader: failed to restore from DB, starting fresh:', err.message);
+    });
   }
 
   /**
@@ -183,6 +190,138 @@ export class DemoTrader {
         console.error('Error in event listener:', error);
       }
     });
+  }
+
+  // ==================== PERSISTENCE ====================
+
+  /**
+   * Persist current state to the database. Called after every state-changing operation.
+   * Fire-and-forget — errors are logged but not thrown.
+   */
+  private persistState(): void {
+    // Serialize in a try-catch to never break trading flow
+    try {
+      const portfolioData = JSON.stringify({
+        totalValue: this.portfolio.totalValue,
+        cashBalance: this.portfolio.cashBalance,
+        realizedPnL: this.portfolio.realizedPnL,
+        unrealizedPnL: this.portfolio.unrealizedPnL,
+      });
+
+      const positionsData = JSON.stringify(
+        Array.from(this.positions.entries()).map(([key, pos]) => ({
+          id: pos.id,
+          symbol: key,
+          symbol2: pos.symbol,
+          side: pos.side,
+          quantity: pos.quantity,
+          avgEntryPrice: pos.avgEntryPrice,
+          currentPrice: pos.currentPrice,
+          marketValue: pos.marketValue,
+          unrealizedPnL: pos.unrealizedPnL,
+          unrealizedPnLPercent: pos.unrealizedPnLPercent,
+          leverage: pos.leverage,
+          stopLoss: pos.stopLoss,
+          takeProfit: pos.takeProfit,
+          trailingStopActivated: pos.trailingStopActivated,
+          trailingStopDistance: pos.trailingStopDistance,
+          openedAt: pos.openedAt,
+        }))
+      );
+
+      const realizedData = JSON.stringify(this.realizedTrades);
+      const circuitData = JSON.stringify({
+        consecutiveLosses: this.consecutiveLosses,
+        circuitBreakerState: this.circuitBreakerState,
+        circuitBreakerTrippedAt: this.circuitBreakerTrippedAt,
+        circuitBreakerCooldownExpiresAt: this.circuitBreakerCooldownExpiresAt,
+        positionSizeMultiplier: this.positionSizeMultiplier,
+        recoveryWins: this.recoveryWins,
+      });
+
+      // Upsert the singleton row
+      db.demoState.upsert({
+        where: { id: 'singleton' },
+        update: { portfolioData, positionsData, realizedData, circuitData },
+        create: { id: 'singleton', portfolioData, positionsData, realizedData, circuitData },
+      }).catch(err => {
+        console.error('DemoTrader: persist error:', err.message);
+      });
+    } catch (err) {
+      console.error('DemoTrader: persist serialization error:', err);
+    }
+  }
+
+  /**
+   * Restore demo state from the database on startup.
+   */
+  private async restoreFromDB(): Promise<void> {
+    try {
+      const state = await db.demoState.findUnique({ where: { id: 'singleton' } });
+      if (!state) return;
+
+      // Restore portfolio
+      const portfolio = JSON.parse(state.portfolioData);
+      this.portfolio = {
+        id: 'demo-portfolio',
+        name: 'Demo Portfolio',
+        totalValue: portfolio.totalValue ?? 10000,
+        cashBalance: portfolio.cashBalance ?? 10000,
+        realizedPnL: portfolio.realizedPnL ?? 0,
+        unrealizedPnL: portfolio.unrealizedPnL ?? 0,
+        positions: [],
+        demo: true,
+      };
+
+      // Restore positions
+      const positions: Array<Record<string, unknown>> = JSON.parse(state.positionsData);
+      for (const p of positions) {
+        const pos: DemoPosition = {
+          id: p.id as string || `pos-${p.symbol2}`,
+          symbol: p.symbol2 as string,
+          side: p.side as PositionSide,
+          quantity: p.quantity as number,
+          avgEntryPrice: p.avgEntryPrice as number,
+          currentPrice: p.currentPrice as number,
+          marketValue: p.marketValue as number,
+          unrealizedPnL: p.unrealizedPnL as number,
+          unrealizedPnLPercent: p.unrealizedPnLPercent as number,
+          leverage: p.leverage as number,
+          stopLoss: p.stopLoss as number | undefined,
+          takeProfit: p.takeProfit as number | undefined,
+          trailingStopActivated: p.trailingStopActivated as boolean,
+          trailingStopDistance: p.trailingStopDistance as number,
+          openedAt: new Date(p.openedAt as string),
+        };
+        this.positions.set(p.symbol as string, pos);
+        // Also populate currentPrices so placeOrder/closePosition work
+        if (pos.currentPrice > 0) {
+          this.currentPrices.set(p.symbol2 as string, pos.currentPrice);
+        }
+      }
+
+      // Restore realized trades
+      if (state.realizedData) {
+        const rt: Array<RealizedTradePnL> = JSON.parse(state.realizedData);
+        this.realizedTrades = rt.map(t => ({ ...t, closedAt: new Date(t.closedAt) }));
+      }
+
+      // Restore circuit breaker
+      if (state.circuitData) {
+        const cb = JSON.parse(state.circuitData);
+        this.consecutiveLosses = cb.consecutiveLosses ?? 0;
+        this.circuitBreakerState = cb.circuitBreakerState ?? 'CLOSED';
+        this.circuitBreakerTrippedAt = cb.circuitBreakerTrippedAt ? new Date(cb.circuitBreakerTrippedAt) : null;
+        this.circuitBreakerCooldownExpiresAt = cb.circuitBreakerCooldownExpiresAt ? new Date(cb.circuitBreakerCooldownExpiresAt) : null;
+        this.positionSizeMultiplier = cb.positionSizeMultiplier ?? 1.0;
+        this.recoveryWins = cb.recoveryWins ?? 0;
+      }
+
+      console.log(`DemoTrader: restored from DB — ${this.positions.size} positions, ${this.realizedTrades.length} realized trades, portfolio $${this.portfolio.totalValue.toFixed(2)}`);
+      this.emit('portfolio_restored', this.portfolio);
+    } catch (err) {
+      console.error('DemoTrader: restore error:', err);
+    }
   }
 
   /**
@@ -253,6 +392,14 @@ export class DemoTrader {
     this.checkPendingOrders(symbol, price);
 
     this.emit('price_update', { symbol, price });
+
+    // Debounced persist — save state after price updates (throttled to 1/sec)
+    if (!this._persistTimer) {
+      this._persistTimer = setTimeout(() => {
+        this.persistState();
+        this._persistTimer = null;
+      }, 1000);
+    }
   }
 
   /**
@@ -368,12 +515,9 @@ export class DemoTrader {
     }
 
     this.emit('order_placed', order);
+    this.persistState();
     return order;
   }
-
-  /**
-   * Execute a signal
-   */
   async executeSignal(signal: Signal): Promise<DemoOrder | null> {
     if (signal.action === TradeAction.HOLD) {
       return null;
@@ -677,6 +821,7 @@ export class DemoTrader {
 
     // Circuit breaker: track consecutive wins/losses
     this.recordTradeResult(pnl);
+    this.persistState();
   }
 
   /**
@@ -964,11 +1109,8 @@ export class DemoTrader {
     };
 
     this.emit('portfolio_reset', this.portfolio);
+    this.persistState();
   }
-
-  /**
-   * Get performance statistics
-   */
   getStatistics(): {
     totalTrades: number;
     winningTrades: number;

@@ -122,9 +122,20 @@ export async function GET(request: NextRequest) {
         });
 
       case 'realized_trades':
-        return NextResponse.json({ 
-          success: true, 
-          data: demoTrader.getRealizedTrades() 
+        return NextResponse.json({
+          success: true,
+          data: demoTrader.getRealizedTrades()
+        });
+
+      case 'sync':
+        return NextResponse.json({
+          success: true,
+          data: {
+            portfolio: demoTrader.getPortfolio(),
+            positions: demoTrader.getPositions(),
+            tradeHistory: demoTrader.getTradeHistory(),
+            realizedTrades: demoTrader.getRealizedTrades(),
+          }
         });
 
       default:

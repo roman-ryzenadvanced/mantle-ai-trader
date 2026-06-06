@@ -230,6 +230,16 @@ model ExchangeAccount {
   updatedAt   DateTime  @updatedAt
 }
 
+// Demo Trading Persistence — stores serialized demo trader state
+model DemoState {
+  id              String   @id @default("singleton")
+  portfolioData   String   // JSON: portfolio values
+  positionsData   String   // JSON: open positions map
+  realizedData    String   // JSON: realized trades
+  circuitData     String   // JSON: circuit breaker state
+  updatedAt       DateTime @updatedAt
+}
+
 // Signal Rating History
 model SignalRating {
   id              String    @id @default(uuid())

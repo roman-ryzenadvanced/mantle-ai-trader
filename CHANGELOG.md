@@ -2,6 +2,24 @@
 
 All notable changes to the Mantle AI Trader project.
 
+## [v3.3.0] - 2026-06-06
+
+### Added
+- **Persistence Memory**
+  - Demo trader state (portfolio, positions, trades, circuit breaker) persisted to PostgreSQL via `DemoState` model
+  - State auto-restored on server startup from database
+  - `persistState()` called after every trade: place order, close position, reset
+  - Debounced persistence on price updates (5-second debounce to avoid excessive DB writes)
+  - `sync` API endpoint (`/api/trading/demo?action=sync`) for full state retrieval
+  - Auto-sync polling on frontend (every 30s) keeps UI in sync with persisted state
+  - Initial page load restores persisted portfolio and positions from server
+  - Trading mode (demo/live) saved to localStorage and restored on reload
+
+### Database
+- Added `DemoState` model (singleton row with portfolioData, positionsData, realizedData, circuitData as JSON columns)
+
+---
+
 ## [v3.2.0] - 2026-06-06
 
 ### Added

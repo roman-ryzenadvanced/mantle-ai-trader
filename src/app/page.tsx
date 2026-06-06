@@ -229,7 +229,20 @@ export default function TradingDashboard() {
   const [realizedTrades, setRealizedTrades] = useState<RealizedTrade[]>([]);
 
   // Trading mode & platform settings
-  const [tradingMode, setTradingMode] = useState<'demo' | 'live'>('demo');
+  const [tradingMode, _setTradingMode] = useState<'demo' | 'live'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('mantle_trading_mode') as 'demo' | 'live') || 'demo';
+    }
+    return 'demo';
+  });
+
+  // Persist trading mode to localStorage whenever it changes
+  const handleSetTradingMode = (mode: 'demo' | 'live') => {
+    _setTradingMode(mode);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('mantle_trading_mode', mode);
+    }
+  };
   const [showSettings, setShowSettings] = useState(false);
   const [exchangeAccounts, setExchangeAccounts] = useState<Array<{
     id: string; name: string; exchange: string; apiKey: string; apiSecret: string;
@@ -327,6 +340,14 @@ export default function TradingDashboard() {
       const breakingData = await breakingRes.json();
       if (breakingData.success) {
         setBreakingNews(breakingData.data || []);
+      }
+
+      // Restore persisted demo state (portfolio + positions)
+      const syncRes = await fetch('/api/trading/demo?action=sync');
+      const syncData = await syncRes.json();
+      if (syncData.success) {
+        if (syncData.data.portfolio) setPortfolio(syncData.data.portfolio);
+        if (syncData.data.positions) setPositions(syncData.data.positions);
       }
 
       // Fetch risk metrics
@@ -914,6 +935,23 @@ export default function TradingDashboard() {
     }
   }, [tradingMode]);
 
+  // Auto-sync demo data every 30 seconds to keep frontend in sync with persisted state
+  useEffect(() => {
+    const syncDemo = async () => {
+      if (tradingMode !== 'demo') return;
+      try {
+        const res = await fetch('/api/trading/demo?action=sync');
+        const data = await res.json();
+        if (data.success) {
+          if (data.data.portfolio) setPortfolio(data.data.portfolio);
+          if (data.data.positions) setPositions(data.data.positions);
+        }
+      } catch {}
+    };
+    const interval = setInterval(syncDemo, 30000);
+    return () => clearInterval(interval);
+  }, [tradingMode]);
+
   const fetchPositions = async () => {
     try {
       const res = await fetch('/api/trading/demo?action=positions');
@@ -1033,7 +1071,7 @@ export default function TradingDashboard() {
             {/* Demo / Live Mode Toggle */}
             <div className="flex items-center rounded-lg border bg-muted p-0.5">
               <button
-                onClick={() => setTradingMode('demo')}
+                onClick={() => handleSetTradingMode('demo')}
                 className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
                   tradingMode === 'demo'
                     ? 'bg-green-600 text-white shadow-sm'
@@ -1049,7 +1087,7 @@ export default function TradingDashboard() {
                     setShowSettings(true);
                     return;
                   }
-                  setTradingMode('live');
+                  handleSetTradingMode('live');
                 }}
                 className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
                   tradingMode === 'live'
