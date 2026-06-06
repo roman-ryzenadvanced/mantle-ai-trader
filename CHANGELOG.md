@@ -2,6 +2,68 @@
 
 All notable changes to the Mantle AI Trader project.
 
+## [v3.5.0] - 2026-06-07
+
+### Added
+- **User Management & Authentication System**
+  - Full NextAuth.js v4 integration with CredentialsProvider and JWT sessions (30-day expiry)
+  - User registration (`/register`) with name, email, password, and confirmation
+  - Login page (`/login`) with email/password authentication and callback URL redirect
+  - Per-user Account model in PostgreSQL (id, email, passwordHash, name, role, timestamps)
+  - Password hashing with bcryptjs (12 rounds)
+  - AuthProvider wrapping the entire app (SessionProvider from next-auth/react)
+  - User menu in header: displays user name + sign-out button
+  - Auth guard on dashboard: unauthenticated users see sign-in call-to-action
+  - Automatic redirect to `/login` for protected pages
+
+- **Per-User Data Isolation**
+  - Per-user DemoTrader instances (Map-based, keyed by userId) replacing global singleton
+  - All API routes scoped to authenticated user: demo, live, settings, signals, backtest
+  - Each user gets their own demo portfolio, positions, trade history, and settings
+  - Middleware-based route protection for `/api/trading/*` (public exceptions: market, news, health, auth)
+  - JWT token verification via `getToken` from next-auth/jwt in middleware
+  - API routes return 401 for unauthenticated requests, dashboard redirects to login
+
+- **API Key Encryption**
+  - AES-256-GCM encryption for exchange API keys stored at rest
+  - PBKDF2 key derivation (100,000 iterations, SHA-256) from userId
+  - Per-user encryption/decryption — keys are unique per user account
+  - Exchange account settings encrypt API keys on save, decrypt on use
+  - Salt, IV, and auth tag stored with ciphertext for secure key rotation
+
+- **Auth Infrastructure**
+  - `src/lib/auth.ts` — NextAuth configuration export (GET/POST handlers)
+  - `src/lib/auth-options.ts` — Auth options: providers, JWT strategy, callbacks
+  - `src/lib/auth-helper.ts` — `getAuthUser()` helper for server-side API routes
+  - `src/lib/crypto.ts` — Encrypt/decrypt utilities with AES-256-GCM
+  - `src/components/auth-provider.tsx` — Client-side SessionProvider wrapper
+  - `src/middleware.ts` — Route protection with JWT token verification
+  - `src/app/api/auth/[...nextauth]/route.ts` — NextAuth API route handler
+  - `src/app/api/auth/register/route.ts` — User registration endpoint
+  - `src/app/login/page.tsx` — Login page with Suspense boundary
+  - `src/app/login/login-form.tsx` — Login form client component
+  - `src/app/register/page.tsx` — Registration page with validation
+
+### Changed
+- `User` model renamed to `Account` in Prisma schema to avoid conflict with next-auth types
+- All data models (ExchangeAccount, UserSettings, TradingSignal, BacktestSession, TradeHistory, DemoState) now include `userId` foreign key
+- `getDemoTrader(userId)` factory function replaces singleton `demoTrader` export
+- Demo state persistence key changed from `'singleton'` to `demo-${userId}`
+
+### Fixed
+- Demo order placement error ("internal error") — fixed price passing chain from frontend through API to DemoTrader
+  - MARKET orders use `livePrice || entryPrice || 0` fallback
+  - `executeSignal` and `closePosition` now pass current price to `placeOrder`
+  - `placeOrder` uses `params.price || currentPrice` for execution price
+  - Demo API route returns actual error messages instead of generic text
+  - Fixed `p.symbol2` typo in DB restore to `p.symbol`
+
+### Database
+- Added `Account` model (id, email, passwordHash, name, role, createdAt, updatedAt)
+- Added `userId` relation to: ExchangeAccount, UserSettings, TradingSignal, BacktestSession, TradeHistory, DemoState
+
+---
+
 ## [v3.4.0] - 2026-06-06
 
 ### Added

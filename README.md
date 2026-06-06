@@ -28,6 +28,7 @@
   
   <p>
     <img src="https://img.shields.io/badge/Platform-Next.js%2016-black?style=flat-square&logo=next.js" alt="Platform" />
+    <img src="https://img.shields.io/badge/Auth-NextAuth%204-blue?style=flat-square" alt="Auth" />
     <img src="https://img.shields.io/badge/Language-TypeScript%205-blue?style=flat-square&logo=typescript" alt="TypeScript" />
     <img src="https://img.shields.io/badge/AI-z--ai--web--dev--sdk-purple?style=flat-square" alt="AI SDK" />
     <img src="https://img.shields.io/badge/Exchanges-Bybit%20%7C%20Binance%20%7C%20OKX%20%7C%20Gate.io%20%7C%20Bitget-orange?style=flat-square" alt="Exchanges" />
@@ -118,6 +119,17 @@
 - **Testnet/Mainnet Toggle**: Per-account safety controls
 - **API Key Masking**: Keys hidden in API responses
 
+### User Management & Authentication
+
+| Feature | Description |
+|---------|-------------|
+| **Registration** | User sign-up with name, email, password (bcrypt hashed) |
+| **Login** | Email/password authentication via NextAuth.js v4 (JWT sessions, 30-day expiry) |
+| **Per-User Isolation** | Each user has their own demo portfolio, positions, signals, backtests, and settings |
+| **Route Protection** | Middleware guards all `/api/trading/*` routes; unauthenticated users see sign-in CTA |
+| **API Key Encryption** | AES-256-GCM encryption for exchange keys at rest, PBKDF2 key derivation from userId |
+| **User Menu** | Header displays user name + sign-out button when authenticated |
+
 ### Demo/Live Trading Modes
 
 - **One-click Toggle**: Switch between demo and live mode from the header
@@ -176,7 +188,8 @@ cp .env.example .env
 # Setup database (PostgreSQL)
 bunx prisma migrate dev
 
-# Start the application
+# Start the application (register a new account at /register)
+bun run dev
 bun run dev
 ```
 
@@ -279,6 +292,7 @@ http://localhost:3000/api/trading
 | GET | `/settings` | List exchange accounts |
 | POST | `/settings` | Save, test, delete, activate accounts |
 | GET | `/health` | System health check |
+| POST | `/auth/register` | Register new user account |
 
 ---
 
@@ -289,6 +303,10 @@ http://localhost:3000/api/trading
 ```env
 # Database (PostgreSQL)
 DATABASE_URL="postgresql://user:password@localhost:5432/mantle_trader"
+
+# NextAuth
+NEXTAUTH_SECRET="your-random-secret-generate-with-openssl-rand-base64-32"
+NEXTAUTH_URL="http://localhost:3000"
 
 # Bybit Exchange (Optional - for live trading)
 BYBIT_API_KEY=your_api_key
@@ -319,29 +337,43 @@ CHROMADB_URL=http://localhost:8000
 mantle-ai-trader/
 ├── src/
 │   ├── app/
-│   │   ├── api/trading/        # REST API endpoints
-│   │   │   ├── demo/route.ts    # Demo trading (positions, orders, sync)
-│   │   │   ├── live/route.ts    # Live exchange trading
-│   │   │   ├── market/route.ts # Multi-exchange volume monitoring
-│   │   │   ├── signals/        # Signal generation + scanning
-│   │   │   ├── news/route.ts   # News aggregation + sentiment
-│   │   │   ├── backtest/       # Backtesting engine
-│   │   │   └── settings/       # Exchange account management
-│   │   ├── layout.tsx          # Root layout with SEO
-│   │   └── page.tsx            # Main dashboard (single-page)
+│   │   ├── api/
+│   │   │   ├── auth/            # NextAuth routes + registration
+│   │   │   │   ├── [...nextauth]/route.ts
+│   │   │   │   └── register/route.ts
+│   │   │   └── trading/        # REST API endpoints (auth-protected)
+│   │   │       ├── demo/route.ts    # Demo trading (positions, orders, sync)
+│   │   │       ├── live/route.ts    # Live exchange trading
+│   │   │       ├── market/route.ts # Multi-exchange volume monitoring (public)
+│   │   │       ├── signals/        # Signal generation + scanning
+│   │   │       ├── news/route.ts   # News aggregation + sentiment (public)
+│   │   │       ├── backtest/       # Backtesting engine
+│   │   │       └── settings/       # Exchange account management
+│   │   ├── login/               # Login page
+│   │   ├── register/            # Registration page
+│   │   ├── layout.tsx           # Root layout with AuthProvider
+│   │   └── page.tsx             # Main dashboard (single-page)
 │   ├── lib/
+│   │   ├── auth.ts              # NextAuth handler export
+│   │   ├── auth-options.ts      # Auth config (providers, JWT, callbacks)
+│   │   ├── auth-helper.ts       # getAuthUser() for server routes
+│   │   ├── crypto.ts            # AES-256-GCM API key encryption
+│   │   ├── db.ts                # Prisma client singleton
 │   │   ├── trading/
 │   │   │   ├── core/            # Bybit client, types
 │   │   │   ├── signals/         # AI signal engine, 10+ indicators
 │   │   │   ├── news/            # News aggregator, sentiment
 │   │   │   ├── backtest/        # Backtesting engine, 7 strategies
-│   │   │   ├── demo/            # Paper trading, circuit breaker, persistence
+│   │   │   ├── demo/            # Paper trading, per-user instances
 │   │   │   ├── risk/            # Risk management
 │   │   │   ├── analytics/       # Performance tracking
 │   │   │   ├── journal/         # Trade journal
 │   │   │   └── portfolio/       # Portfolio rebalancer
 │   │   └── api/                 # API validation utilities
-│   └── components/ui/           # shadcn/ui components
+│   ├── middleware.ts            # Route protection with JWT verification
+│   ├── components/
+│   │   ├── auth-provider.tsx    # SessionProvider wrapper
+│   │   └── ui/                  # shadcn/ui components
 ├── tests/                       # 620+ tests across 22 files
 ├── mini-services/trading-service/ # WebSocket price service
 ├── prisma/
@@ -358,6 +390,8 @@ mantle-ai-trader/
 | **Runtime** | Bun 1.2 |
 | **Styling** | Tailwind CSS 4, shadcn/ui |
 | **Database** | PostgreSQL, Prisma ORM |
+| **Auth** | NextAuth.js v4 (JWT sessions, bcryptjs) |
+| **Security** | AES-256-GCM encryption for API keys |
 | **AI/ML** | z-ai-web-dev-sdk |
 | **Exchange** | Bybit API v5 (live), 5 exchanges (volume monitoring) |
 | **Real-time** | Socket.io |
@@ -412,6 +446,7 @@ bun test tests/integration/
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v3.5.0** | 2026-06-07 | User management & authentication, per-user data isolation, AES-256-GCM API key encryption, demo order bug fix |
 | **v3.4.0** | 2026-06-06 | Multi-exchange market volume & sentiment monitor (Bybit, Binance, OKX, Gate.io, Bitget), per-instrument volume bars, sentiment engine, exchange dominance % |
 | **v3.3.1** | 2026-06-06 | 12 platform presets in settings (Bybit, Binance, OKX, Bitget, KuCoin, Gate.io, HTX, Deribit, BingX, MEXC, BitMart, Crypto.com) |
 | **v3.3.0** | 2026-06-06 | Persistence memory — demo state saved to PostgreSQL, auto-restore on startup, auto-sync every 30s |
