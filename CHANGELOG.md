@@ -2,6 +2,26 @@
 
 All notable changes to the Mantle AI Trader project.
 
+## [v3.4.0] - 2026-06-06
+
+### Added
+- **Market Volume & Sentiment Monitor**
+  - Real-time 24h volume data aggregated from 5 exchanges: Bybit, Binance, OKX, Gate.io, Bitget
+  - Per-instrument breakdown with price, change %, high/low range, sentiment score
+  - Volume bars proportional to total market volume for visual comparison
+  - Exchange volume dominance (% share per source) for each instrument
+  - Sentiment engine: bullish/bearish/neutral classification based on price change + bid/ask imbalance
+  - Market-wide summary: overall sentiment, bullish/bearish/neutral counts, total volume
+  - Tracks 10 instruments: BTC, ETH, SOL, BNB, XRP, DOGE, ADA, AVAX, DOT, LINK
+  - Auto-refresh every 60 seconds (no API keys needed — uses public endpoints)
+  - Manual refresh button
+  - Clickable rows to select instrument for trading
+
+### New API
+- `/api/trading/market?action=volume` — aggregated multi-exchange volume and sentiment data
+
+---
+
 ## [v3.3.1] - 2026-06-06
 
 ### Added

@@ -220,6 +220,21 @@ export default function TradingDashboard() {
   const [breakingNews, setBreakingNews] = useState<NewsItem[]>([]);
   const [prices, setPrices] = useState<Record<string, PriceUpdate>>({});
   const [selectedSymbol, setSelectedSymbol] = useState('BTCUSDT');
+  const [marketVolumeData, setMarketVolumeData] = useState<{
+    instruments: Array<{
+      symbol: string; displayName: string;
+      exchanges: Record<string, { volume24h: number; price: number; change24h: number; high24h: number; low24h: number }>;
+      totalVolume24h: number; avgPrice: number; avgChange24h: number;
+      sentiment: string; sentimentScore: number;
+      volumeDominance: Record<string, number>;
+      priceRange24h: { high: number; low: number; percent: number };
+    }>;
+    summary: {
+      totalMarketVolume: number; instrumentsTracked: number;
+      bullishCount: number; bearishCount: number; neutralCount: number;
+      overallSentiment: string; exchangesResponding: number; timestamp: number;
+    };
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('signals');
   const [riskMetrics, setRiskMetrics] = useState<RiskMetrics | null>(null);
@@ -756,6 +771,22 @@ export default function TradingDashboard() {
     }
   };
 
+  // ── Market Volume Monitoring ──
+  const formatCompactVolume = (v: number): string => {
+    if (v >= 1e9) return (v / 1e9).toFixed(1) + 'B';
+    if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M';
+    if (v >= 1e3) return (v / 1e3).toFixed(1) + 'K';
+    return v.toFixed(0);
+  };
+
+  const fetchMarketVolume = async () => {
+    try {
+      const res = await fetch('/api/trading/market?action=volume');
+      const data = await res.json();
+      if (data.success) setMarketVolumeData(data.data);
+    } catch {}
+  };
+
   // ── Live Trading Functions ──
   const fetchLiveData = async () => {
     if (tradingMode !== 'live') return;
@@ -951,6 +982,13 @@ export default function TradingDashboard() {
     const interval = setInterval(syncDemo, 30000);
     return () => clearInterval(interval);
   }, [tradingMode]);
+
+  // Auto-fetch market volume every 60 seconds (public data, always active)
+  useEffect(() => {
+    fetchMarketVolume();
+    const interval = setInterval(fetchMarketVolume, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const fetchPositions = async () => {
     try {
@@ -1281,6 +1319,162 @@ export default function TradingDashboard() {
                 );
               })}
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Market Volume & Sentiment Monitor */}
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-lg">Market Volume Monitor</CardTitle>
+                {marketVolumeData?.summary && (
+                  <Badge variant="outline" className="text-[10px]">
+                    {marketVolumeData.summary.exchangesResponding} sources &middot; live
+                  </Badge>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs h-7"
+                onClick={fetchMarketVolume}
+              >
+                <RefreshCw className={`h-3 w-3 mr-1`} />
+                Refresh
+              </Button>
+            </div>
+            {marketVolumeData?.summary && (
+              <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
+                <span>
+                  Overall:{' '}
+                  <span className={`font-semibold ${
+                    marketVolumeData.summary.overallSentiment === 'strongly_bullish' ? 'text-green-400' :
+                    marketVolumeData.summary.overallSentiment === 'bullish' ? 'text-green-500' :
+                    marketVolumeData.summary.overallSentiment === 'strongly_bearish' ? 'text-red-400' :
+                    marketVolumeData.summary.overallSentiment === 'bearish' ? 'text-red-500' :
+                    'text-gray-400'
+                  }`}>
+                    {marketVolumeData.summary.overallSentiment.replace('_', ' ').toUpperCase()}
+                  </span>
+                </span>
+                <span>Total Vol: <span className="font-semibold text-foreground">${formatCompactVolume(marketVolumeData.summary.totalMarketVolume)}</span></span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-full bg-green-500"></span> {marketVolumeData.summary.bullishCount} bullish
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-full bg-gray-400"></span> {marketVolumeData.summary.neutralCount} neutral
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span> {marketVolumeData.summary.bearishCount} bearish
+                </span>
+              </div>
+            )}
+          </CardHeader>
+          <CardContent>
+            {!marketVolumeData ? (
+              <div className="text-sm text-muted-foreground text-center py-8">Loading market data...</div>
+            ) : (
+              <div className="space-y-2">
+                {marketVolumeData.instruments.map((inst) => {
+                  const maxVolume = Math.max(...marketVolumeData.instruments.map(i => i.totalVolume24h), 1);
+                  const volumePercent = (inst.totalVolume24h / maxVolume) * 100;
+                  const sentimentColor = inst.sentiment === 'strongly_bullish' ? 'text-green-400 bg-green-500/10 border-green-500/30' :
+                    inst.sentiment === 'bullish' ? 'text-green-500 bg-green-500/10 border-green-500/20' :
+                    inst.sentiment === 'strongly_bearish' ? 'text-red-400 bg-red-500/10 border-red-500/30' :
+                    inst.sentiment === 'bearish' ? 'text-red-500 bg-red-500/10 border-red-500/20' :
+                    'text-gray-400 bg-gray-500/10 border-gray-500/20';
+                  const sentimentEmoji = inst.sentiment === 'strongly_bullish' ? '▲▲' :
+                    inst.sentiment === 'bullish' ? '▲' :
+                    inst.sentiment === 'strongly_bearish' ? '▼▼' :
+                    inst.sentiment === 'bearish' ? '▼' : '◆';
+                  const exchangeList = Object.entries(inst.exchanges);
+                  const selectedExchangeInst = inst.exchanges['binance'] || inst.exchanges['bybit'] || exchangeList[0]?.[1];
+
+                  return (
+                    <div
+                      key={inst.symbol}
+                      className={`rounded-lg border p-2.5 transition-colors cursor-pointer hover:bg-muted/50 ${
+                        selectedSymbol === inst.symbol ? 'border-primary/50 bg-primary/5' : ''
+                      }`}
+                      onClick={() => setSelectedSymbol(inst.symbol)}
+                    >
+                      <div className="flex items-center gap-3">
+                        {/* Symbol + Sentiment */}
+                        <div className="flex items-center gap-2 w-36 shrink-0">
+                          <span className="font-semibold text-sm">{inst.displayName}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${sentimentColor}`}>
+                            {sentimentEmoji} {inst.sentiment.replace('_', ' ')}
+                          </span>
+                        </div>
+
+                        {/* Volume Bar */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-0.5">
+                            <span>24h Volume</span>
+                            <span className="font-mono font-medium text-foreground">
+                              ${inst.totalVolume24h > 0 ? formatCompactVolume(inst.totalVolume24h) : '---'}
+                            </span>
+                          </div>
+                          <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                inst.avgChange24h >= 0 ? 'bg-green-500/70' : 'bg-red-500/70'
+                              }`}
+                              style={{ width: `${Math.max(volumePercent, 1)}%` }}
+                            />
+                          </div>
+                          {/* Exchange breakdown mini bars */}
+                          {exchangeList.length > 1 && (
+                            <div className="flex gap-0.5 mt-0.5">
+                              {exchangeList.map(([name, data]) => {
+                                const share = inst.volumeDominance[name] || 0;
+                                if (share < 0.5) return null;
+                                return (
+                                  <span key={name} className="text-[9px] text-muted-foreground">
+                                    {name}: {share.toFixed(0)}%
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Price + Change */}
+                        <div className="text-right shrink-0 w-28">
+                          <div className="font-mono text-sm font-medium">
+                            ${selectedExchangeInst ? selectedExchangeInst.price.toFixed(selectedExchangeInst.price < 10 ? 4 : 2) : '---'}
+                          </div>
+                          <div className={`text-xs font-mono font-medium ${
+                            inst.avgChange24h >= 0 ? 'text-green-500' : 'text-red-500'
+                          }`}>
+                            {inst.avgChange24h >= 0 ? '+' : ''}{inst.avgChange24h.toFixed(2)}%
+                          </div>
+                        </div>
+
+                        {/* Range + Sources */}
+                        <div className="text-right shrink-0 w-28 text-[10px] text-muted-foreground">
+                          {inst.priceRange24h.high > 0 && (
+                            <>
+                              <div>H: ${inst.priceRange24h.high.toFixed(inst.priceRange24h.high < 10 ? 4 : 2)}</div>
+                              <div>L: ${inst.priceRange24h.low.toFixed(inst.priceRange24h.low < 10 ? 4 : 2)}</div>
+                              <div className="text-muted-foreground/60">R: {inst.priceRange24h.percent.toFixed(1)}%</div>
+                            </>
+                          )}
+                          <div className="mt-0.5">
+                            {exchangeList.map(([name]) => (
+                              <span key={name} className="inline-block mr-1 px-1 py-px rounded bg-muted/60 text-[8px] uppercase">
+                                {name.slice(0, 3)}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
 
