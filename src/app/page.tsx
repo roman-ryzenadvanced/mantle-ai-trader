@@ -772,12 +772,13 @@ export default function TradingDashboard() {
   };
 
   // ── Market Volume Monitoring ──
-  const formatCompactVolume = (v: number): string => {
-    if (typeof v !== 'number' || !isFinite(v)) return '--';
-    if (v >= 1e9) return (v / 1e9).toFixed(1) + 'B';
-    if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M';
-    if (v >= 1e3) return (v / 1e3).toFixed(1) + 'K';
-    return v.toFixed(0);
+  const formatCompactVolume = (v: unknown): string => {
+    const n = Number(v);
+    if (!isFinite(n)) return '--';
+    if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+    if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+    return n.toFixed(0);
   };
 
   const fetchMarketVolume = async () => {

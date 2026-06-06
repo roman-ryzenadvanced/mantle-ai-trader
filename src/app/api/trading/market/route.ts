@@ -264,7 +264,8 @@ function aggregateVolumes(allVolumes: ExchangeVolume[]): AggregatedInstrument[] 
     let globalLow = Infinity;
 
     for (const v of volumes) {
-      if (v.volume24h <= 0) continue; // Skip zero-volume entries
+      const vol = Number(v.volume24h) || 0;
+      if (vol <= 0) continue; // Skip zero-volume entries
       exchanges[v.exchange] = {
         volume24h: v.volume24h,
         price: v.price,
@@ -272,12 +273,14 @@ function aggregateVolumes(allVolumes: ExchangeVolume[]): AggregatedInstrument[] 
         high24h: v.high24h,
         low24h: v.low24h,
       };
-      totalVolume += v.volume24h;
-      if (v.price > 0) {
-        totalPrice += v.price;
+      totalVolume += vol;
+      const price = Number(v.price) || 0;
+      const change = Number(v.change24h) || 0;
+      if (price > 0) {
+        totalPrice += price;
         priceCount++;
       }
-      totalChange += v.change24h;
+      totalChange += change;
       totalBidVol += v.bidVolume;
       totalAskVol += v.askVolume;
       if (v.high24h > globalHigh) globalHigh = v.high24h;
@@ -365,7 +368,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Market-wide stats
-    const totalMarketVolume = instruments.reduce((sum, i) => sum + i.totalVolume24h, 0);
+    const totalMarketVolume = instruments.reduce((sum, i) => sum + (Number(i.totalVolume24h) || 0), 0);
     const bullishCount = instruments.filter(i => i.sentiment === 'bullish' || i.sentiment === 'strongly_bullish').length;
     const bearishCount = instruments.filter(i => i.sentiment === 'bearish' || i.sentiment === 'strongly_bearish').length;
 
