@@ -1,0 +1,242 @@
+// Prisma Schema for Mantle AI Trading Bot
+// Comprehensive database schema for signals, trades, backtests, and news
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./data/mantle-trader.db"
+}
+
+// Signal Management
+model Signal {
+  id              String      @id @default(uuid())
+  symbol          String      // Trading pair e.g., "BTCUSDT"
+  action          String      // "BUY" | "SELL" | "HOLD"
+  confidence      Float       // 0.0 to 1.0
+  rating          Int         @default(0) // User rating 1-5
+  priceTarget     Float?
+  stopLoss        Float?
+  takeProfit      Float?
+  reasoning       String      // AI-generated reasoning
+  newsSources     String?     // JSON array of source URLs
+  sentimentScore  Float?      // -1 to 1
+  technicalScore  Float?      // 0 to 1
+  fundamentalScore Float?     // 0 to 1
+  status          String      @default("PENDING") // PENDING | EXECUTED | CANCELLED | EXPIRED
+  executedAt      DateTime?
+  executedPrice   Float?
+  result          String?     // WIN | LOSS | NEUTRAL
+  resultPnL       Float?      // Profit/Loss percentage
+  demo            Boolean     @default(false) // Is this a demo signal?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  trades          Trade[]
+  backtestResults BacktestResult[]
+  
+  @@index([symbol])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Trade Execution
+model Trade {
+  id              String    @id @default(uuid())
+  signalId        String?
+  signal          Signal?   @relation(fields: [signalId], references: [id])
+  symbol          String
+  side            String    // "BUY" | "SELL"
+  orderType       String    // "MARKET" | "LIMIT"
+  quantity        Float
+  price           Float
+  leverage        Float     @default(1)
+  stopLoss        Float?
+  takeProfit      Float?
+  status          String    @default("PENDING") // PENDING | FILLED | CANCELLED | FAILED
+  orderId         String?   // Exchange order ID
+  executedAt      DateTime?
+  closedAt        DateTime?
+  pnl             Float?
+  fees            Float?
+  demo            Boolean   @default(false)
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([symbol])
+  @@index([status])
+}
+
+// News Articles
+model NewsArticle {
+  id              String    @id @default(uuid())
+  title           String
+  content         String?
+  summary         String?
+  source          String    // e.g., "CryptoPanic", "CoinGecko"
+  sourceUrl       String?
+  author          String?
+  category        String?   // e.g., "Bitcoin", "DeFi", "Regulation"
+  sentiment       Float?    // -1 to 1
+  importance      Float?    // 0 to 1
+  tags            String?   // JSON array
+  publishedAt     DateTime?
+  fetchedAt       DateTime  @default(now())
+  processed       Boolean   @default(false)
+  vectorId        String?   // ChromaDB vector ID
+  createdAt       DateTime  @default(now())
+  
+  @@unique([sourceUrl])
+  @@index([source])
+  @@index([category])
+  @@index([publishedAt])
+}
+
+// Market Data Cache
+model MarketData {
+  id              String    @id @default(uuid())
+  symbol          String
+  timeframe       String    // "1m", "5m", "15m", "1h", "4h", "1d"
+  openPrice       Float
+  highPrice       Float
+  lowPrice        Float
+  closePrice      Float
+  volume          Float
+  timestamp       DateTime
+  createdAt       DateTime  @default(now())
+  
+  @@unique([symbol, timeframe, timestamp])
+  @@index([symbol, timeframe])
+}
+
+// Backtest Sessions
+model BacktestSession {
+  id              String    @id @default(uuid())
+  name            String
+  description     String?
+  symbol          String
+  startDate       DateTime
+  endDate         DateTime
+  initialCapital  Float
+  finalCapital    Float?
+  totalTrades     Int       @default(0)
+  winRate         Float?
+  maxDrawdown     Float?
+  sharpeRatio     Float?
+  status          String    @default("PENDING") // PENDING | RUNNING | COMPLETED | FAILED
+  config          String?   // JSON configuration
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  results         BacktestResult[]
+  
+  @@index([symbol])
+  @@index([status])
+}
+
+model BacktestResult {
+  id              String          @id @default(uuid())
+  sessionId       String
+  session         BacktestSession @relation(fields: [sessionId], references: [id])
+  signalId        String?
+  signal          Signal?         @relation(fields: [signalId], references: [id])
+  symbol          String
+  action          String
+  entryPrice      Float
+  exitPrice       Float?
+  quantity        Float
+  pnl             Float?
+  pnlPercent      Float?
+  executedAt      DateTime
+  closedAt        DateTime?
+  notes           String?
+  createdAt       DateTime        @default(now())
+  
+  @@index([sessionId])
+}
+
+// Portfolio Tracking
+model Portfolio {
+  id              String    @id @default(uuid())
+  name            String    @default("Main Portfolio")
+  totalValue      Float     @default(0)
+  cashBalance     Float     @default(0)
+  realizedPnL     Float     @default(0)
+  unrealizedPnL   Float     @default(0)
+  demo            Boolean   @default(false)
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  positions       Position[]
+  
+  @@index([isActive])
+}
+
+model Position {
+  id              String    @id @default(uuid())
+  portfolioId     String
+  portfolio       Portfolio @relation(fields: [portfolioId], references: [id])
+  symbol          String
+  side            String    // "LONG" | "SHORT"
+  quantity        Float
+  avgEntryPrice   Float
+  currentPrice    Float?
+  marketValue     Float?
+  unrealizedPnL   Float?
+  leverage        Float     @default(1)
+  liquidationPrice Float?
+  openedAt        DateTime  @default(now())
+  closedAt        DateTime?
+  status          String    @default("OPEN") // OPEN | CLOSED
+  demo            Boolean   @default(false)
+  
+  @@index([portfolioId])
+  @@index([symbol])
+}
+
+// User Settings & API Keys (Encrypted in production)
+model UserSettings {
+  id              String    @id @default(uuid())
+  bybitApiKey     String?
+  bybitApiSecret  String?
+  bybitTestnet    Boolean   @default(true)
+  riskLevel       String    @default("MODERATE") // CONSERVATIVE | MODERATE | AGGRESSIVE
+  maxPositionSize Float     @default(1000)
+  maxLeverage     Float     @default(5)
+  autoTrading     Boolean   @default(false)
+  notificationsEnabled Boolean @default(true)
+  telegramChatId  String?
+  discordWebhook  String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// Signal Rating History
+model SignalRating {
+  id              String    @id @default(uuid())
+  signalId        String
+  rating          Int       // 1-5
+  feedback        String?
+  userId          String?
+  createdAt       DateTime  @default(now())
+  
+  @@index([signalId])
+}
+
+// System Logs
+model SystemLog {
+  id              String    @id @default(uuid())
+  level           String    // INFO | WARNING | ERROR | CRITICAL
+  component       String    // e.g., "NewsAggregator", "SignalEngine"
+  message         String
+  details         String?   // JSON additional data
+  createdAt       DateTime  @default(now())
+  
+  @@index([level])
+  @@index([component])
+  @@index([createdAt])
+}
