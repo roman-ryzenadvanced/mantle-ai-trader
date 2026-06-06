@@ -296,7 +296,7 @@ export class DemoTrader {
         this.positions.set(p.symbol as string, pos);
         // Also populate currentPrices so placeOrder/closePosition work
         if (pos.currentPrice > 0) {
-          this.currentPrices.set(p.symbol2 as string, pos.currentPrice);
+          this.currentPrices.set(p.symbol as string, pos.currentPrice);
         }
       }
 
@@ -455,9 +455,7 @@ export class DemoTrader {
     const leverage = params.leverage || 1;
 
     const currentPrice = this.currentPrices.get(params.symbol) || 0;
-    const executionPrice = params.type === OrderType.LIMIT && params.price
-      ? params.price
-      : currentPrice;
+    const executionPrice = params.price || currentPrice;
 
     if (executionPrice <= 0) {
       throw new Error('No price available for this symbol. Set a price first using updatePrice().');
@@ -541,6 +539,7 @@ export class DemoTrader {
         side: signal.action,
         type: OrderType.MARKET,
         quantity: Math.floor(quantity * 100000000) / 100000000, // Round to 8 decimals
+        price: currentPrice,
         stopLoss: signal.stopLoss,
         takeProfit: signal.takeProfit,
         signalId: signal.id
@@ -568,7 +567,8 @@ export class DemoTrader {
         symbol,
         side: closeSide,
         type: OrderType.MARKET,
-        quantity: closeQuantity
+        quantity: closeQuantity,
+        price: position.currentPrice
       });
 
       return order;

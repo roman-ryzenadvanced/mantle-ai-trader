@@ -603,6 +603,7 @@ export default function TradingDashboard() {
           side,
           type: 'MARKET',
           quantity,
+          price: opts?.price,
           leverage: opts?.leverage,
           stopLoss: opts?.stopLoss,
           takeProfit: opts?.takeProfit
@@ -943,8 +944,12 @@ export default function TradingDashboard() {
   const submitOrder = async () => {
     setOrderSubmitting(true);
     try {
+      const livePrice = prices[orderForm.symbol]?.price;
+      const price = orderForm.orderType === 'LIMIT'
+        ? orderForm.entryPrice
+        : (livePrice || orderForm.entryPrice || 0);
       await placeOrder(orderForm.symbol, orderForm.side, orderForm.quantity, {
-        price: orderForm.orderType === 'LIMIT' ? orderForm.entryPrice : undefined,
+        price,
         stopLoss: orderForm.stopLoss,
         takeProfit: orderForm.takeProfit,
         leverage: orderForm.leverage,

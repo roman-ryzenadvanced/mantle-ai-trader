@@ -268,10 +268,10 @@ export async function POST(request: NextRequest) {
         );
     }
   } catch (error) {
-    // QA-FIX #11: Don't expose internal error details to client - could leak implementation info
     console.error('Error executing demo action:', error);
+    const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { success: false, error: 'An internal error occurred while executing the demo action' },
+      { success: false, error: message },
       { status: 500 }
     );
   }
