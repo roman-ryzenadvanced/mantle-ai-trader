@@ -252,7 +252,7 @@ export default function TradingDashboard() {
   const [liveBalance, setLiveBalance] = useState<{ totalEquity: number; totalAvailableBalance: number } | null>(null);
   const [livePositions, setLivePositions] = useState<Position[]>([]);
   // New account form
-  const [newAccount, setNewAccount] = useState({ name: 'Bybit Main', apiKey: '', apiSecret: '', testnet: true });
+  const [newAccount, setNewAccount] = useState({ name: 'Bybit Main', exchange: 'bybit', apiKey: '', apiSecret: '', testnet: true });
   const [accountFormMode, setAccountFormMode] = useState<'add' | 'edit'>('add');
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
 
@@ -689,7 +689,7 @@ export default function TradingDashboard() {
           action: 'save',
           ...(accountFormMode === 'edit' && editingAccountId ? { id: editingAccountId } : {}),
           name: newAccount.name,
-          exchange: 'bybit',
+          exchange: newAccount.exchange,
           apiKey: newAccount.apiKey,
           apiSecret: newAccount.apiSecret,
           testnet: newAccount.testnet,
@@ -697,7 +697,7 @@ export default function TradingDashboard() {
       });
       const data = await res.json();
       if (data.success) {
-        setNewAccount({ name: 'Bybit Main', apiKey: '', apiSecret: '', testnet: true });
+        setNewAccount({ name: 'Bybit Main', exchange: 'bybit', apiKey: '', apiSecret: '', testnet: true });
         setAccountFormMode('add');
         setEditingAccountId(null);
         fetchExchangeAccounts();
@@ -3233,11 +3233,44 @@ export default function TradingDashboard() {
                       <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => {
                         setAccountFormMode('add');
                         setEditingAccountId(null);
-                        setNewAccount({ name: 'Bybit Main', apiKey: '', apiSecret: '', testnet: true });
+                        setNewAccount({ name: 'Bybit Main', exchange: 'bybit', apiKey: '', apiSecret: '', testnet: true });
                       }}>
                         Cancel Edit
                       </Button>
                     )}
+                  </div>
+
+                  {/* Platform Presets */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-muted-foreground">Select Platform</label>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {[
+                        { id: 'bybit', name: 'Bybit', color: 'bg-yellow-500/10 border-yellow-500/30 text-yellow-600' },
+                        { id: 'binance', name: 'Binance', color: 'bg-yellow-400/10 border-yellow-400/30 text-yellow-500' },
+                        { id: 'okx', name: 'OKX', color: 'bg-white/10 border-white/20 text-white' },
+                        { id: 'bitget', name: 'Bitget', color: 'bg-blue-500/10 border-blue-500/30 text-blue-500' },
+                        { id: 'kucoin', name: 'KuCoin', color: 'bg-green-500/10 border-green-500/30 text-green-500' },
+                        { id: 'gateio', name: 'Gate.io', color: 'bg-blue-400/10 border-blue-400/30 text-blue-400' },
+                        { id: 'htx', name: 'HTX', color: 'bg-green-400/10 border-green-400/30 text-green-400' },
+                        { id: 'deribit', name: 'Deribit', color: 'bg-red-500/10 border-red-500/30 text-red-500' },
+                        { id: 'bingx', name: 'BingX', color: 'bg-purple-500/10 border-purple-500/30 text-purple-500' },
+                        { id: 'mexc', name: 'MEXC', color: 'bg-teal-500/10 border-teal-500/30 text-teal-500' },
+                        { id: 'bitmart', name: 'BitMart', color: 'bg-cyan-500/10 border-cyan-500/30 text-cyan-500' },
+                        { id: 'cryptocom', name: 'Crypto.com', color: 'bg-indigo-500/10 border-indigo-500/30 text-indigo-500' },
+                      ].map(platform => (
+                        <button
+                          key={platform.id}
+                          onClick={() => setNewAccount(prev => ({ ...prev, exchange: platform.id, name: `${platform.name} Main` }))}
+                          className={`px-2 py-1.5 rounded-md border text-xs font-medium transition-all ${
+                            newAccount.exchange === platform.id
+                              ? `${platform.color} ring-1 ring-current/40`
+                              : 'border-border bg-muted/30 text-muted-foreground hover:bg-muted/60'
+                          }`}
+                        >
+                          {platform.name}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="space-y-2">

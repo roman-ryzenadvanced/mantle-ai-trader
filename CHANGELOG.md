@@ -2,6 +2,17 @@
 
 All notable changes to the Mantle AI Trader project.
 
+## [v3.3.1] - 2026-06-06
+
+### Added
+- **Platform Presets in Trading Platforms settings**
+  - Quick-select grid for 12 popular exchanges: Bybit, Binance, OKX, Bitget, KuCoin, Gate.io, HTX, Deribit, BingX, MEXC, BitMart, Crypto.com
+  - Each preset auto-fills the account name and exchange type
+  - Color-coded buttons with active selection highlight
+  - Exchange field passed to API on save (no longer hardcoded to Bybit)
+
+---
+
 ## [v3.3.0] - 2026-06-06
 
 ### Added
