@@ -1,47 +1,61 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { Sidebar } from '@/components/layout/Sidebar';
+
+const TAB_TO_ROUTE: Record<string, string> = {
+  dashboard: '/dashboard',
+  terminal: '/terminal',
+  signals: '/signals',
+  positions: '/positions',
+  trades: '/trades',
+  backtest: '/backtest',
+  settings: '/settings',
+  news: '/news',
+  history: '/history',
+};
+
+const ROUTE_TO_TAB: Record<string, string> = Object.fromEntries(
+  Object.entries(TAB_TO_ROUTE).map(([k, v]) => [v, k])
+);
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const pathname = usePathname();
+  const activeTab = ROUTE_TO_TAB[pathname] || 'dashboard';
 
   const handleSignOut = async () => {
     await signOut({ callbackUrl: '/login' });
   };
 
-  // Map sidebar tabs to routes
   const handleTabChange = (tab: string) => {
-    setActiveTab(tab);
-    const routeMap: Record<string, string> = {
-      dashboard: '/dashboard',
-      terminal: '/terminal',
-      signals: '/signals',
-      positions: '/positions',
-      trades: '/trades',
-      backtest: '/backtest',
-      settings: '/settings',
-      news: '/news',
-      history: '/history',
-    };
-    router.push(routeMap[tab] || '/');
+    const route = TAB_TO_ROUTE[tab] || '/dashboard';
+    router.push(route);
   };
 
-  if (!session) {
-    router.push('/login');
-    return null;
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/login');
+    }
+  }, [status, router]);
+
+  if (status === 'loading' || !session) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-950">
+        <div className="animate-pulse text-gray-400">Loading...</div>
+      </div>
+    );
   }
 
-  const tradingMode = 'demo'; // Default, will be updated client-side
+  const tradingMode = 'demo';
 
   return (
     <div className="flex h-screen bg-gray-950 text-white overflow-hidden">

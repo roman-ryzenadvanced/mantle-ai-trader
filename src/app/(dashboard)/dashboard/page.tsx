@@ -48,6 +48,12 @@ export default function DashboardPage() {
   });
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tradingModeLabel, setTradingModeLabel] = useState('DEMO');
+
+  useEffect(() => {
+    const mode = localStorage.getItem('mantle_trading_mode') || 'demo';
+    setTradingModeLabel(mode.toUpperCase());
+  }, []);
 
   const addLog = useCallback((level: string, message: string, data?: unknown) => {
     const entry: LogEntry = {
@@ -210,9 +216,7 @@ export default function DashboardPage() {
       {/* Status badges */}
       <div className="flex gap-3 items-center">
         <Badge variant="outline" className="text-gray-400 border-gray-700">
-          Mode: {typeof window !== 'undefined'
-            ? (localStorage.getItem('mantle_trading_mode') || 'demo').toUpperCase()
-            : 'DEMO'}
+          Mode: {tradingModeLabel}
         </Badge>
         <Badge variant="outline" className="text-gray-400 border-gray-700">
           Session: Active

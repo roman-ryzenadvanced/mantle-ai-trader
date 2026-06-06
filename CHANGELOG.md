@@ -2,6 +2,20 @@
 
 All notable changes to the Mantle AI Trader project.
 
+## [v3.6.1] - 2026-06-08
+
+### Fixed
+- **SSR `location is not defined` error** — Replaced `useState` + `router.push` with `usePathname()` for active tab detection in dashboard layout
+- **SSR `localStorage` access in JSX** — Dashboard page now reads `localStorage` in `useEffect` instead of inline in render
+- **Broken interface after import merge** — Restored `LogEntry` interface declaration that was accidentally removed during formatting
+- **Auth guard race condition** — Dashboard layout now checks `status === 'loading'` before rendering, shows loading spinner instead of `null`
+
+### Changed
+- **Root `/` redirect** — Home page now redirects to `/dashboard` (new UI). Original trading terminal moved to `/terminal`
+- **Sidebar** — Added "Terminal" nav item between Dashboard and Signals for access to original page
+- **Active tab sync** — Sidebar now correctly highlights the active page based on URL pathname
+- **Route-tab mapping** — Extracted `TAB_TO_ROUTE` / `ROUTE_TO_TAB` maps for DRY route handling
+
 ## [v3.6.0] - 2026-06-08
 
 ### Added
