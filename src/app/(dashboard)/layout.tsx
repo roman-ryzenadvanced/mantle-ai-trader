@@ -24,6 +24,7 @@ export default function DashboardLayout({
     setActiveTab(tab);
     const routeMap: Record<string, string> = {
       dashboard: '/dashboard',
+      terminal: '/terminal',
       signals: '/signals',
       positions: '/positions',
       trades: '/trades',

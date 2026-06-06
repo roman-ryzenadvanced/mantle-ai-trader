@@ -10,6 +10,7 @@ import {
   Settings,
   Newspaper,
   History,
+  Terminal,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -23,13 +24,14 @@ interface SidebarProps {
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'terminal', label: 'Terminal', icon: Terminal },
   { id: 'signals', label: 'Signals', icon: Target },
   { id: 'positions', label: 'Positions', icon: Layers },
   { id: 'trades', label: 'Trades', icon: BarChart3 },
   { id: 'backtest', label: 'Backtest', icon: FlaskConical },
-  { id: 'settings', label: 'Settings', icon: Settings },
   { id: 'news', label: 'News', icon: Newspaper },
   { id: 'history', label: 'History', icon: History },
+  { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
 export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
