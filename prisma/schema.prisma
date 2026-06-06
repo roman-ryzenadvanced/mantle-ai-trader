@@ -30,6 +30,8 @@ model User {
   settings         UserSettings[]
   signalRatings    SignalRating[]
   backtestSessions BacktestSession[]
+  riskState        RiskState?
+  systemLogs       SystemLog[]
 }
 
 // ==================== SIGNAL MANAGEMENT ====================
@@ -253,6 +255,11 @@ model UserSettings {
   notificationsEnabled Boolean @default(true)
   telegramChatId  String?
   discordWebhook  String?
+  telegramEnabled    Boolean @default(false)
+  telegramBotToken   String?
+  notificationsOnTrade      Boolean @default(true)
+  notificationsOnRiskWarning Boolean @default(true)
+  notificationsOnError      Boolean @default(true)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -313,13 +320,38 @@ model SignalRating {
 
 model SystemLog {
   id              String    @id @default(uuid())
-  level           String    // INFO | WARNING | ERROR | CRITICAL
-  component       String    // e.g., "NewsAggregator", "SignalEngine"
+  level           String    // INFO | WARNING | ERROR | CRITICAL | TRADE | SIGNAL
+  component       String    // e.g., "NewsAggregator", "SignalEngine", "RiskEngine"
   message         String
   details         String?   // JSON additional data
+  userId          String?   // Nullable for system-wide logs
+  user            User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt       DateTime  @default(now())
 
   @@index([level])
   @@index([component])
   @@index([createdAt])
+  @@index([userId])
+}
+
+// ==================== RISK STATE (circuit breaker persistence) ====================
+
+model RiskState {
+  id                    String    @id @default("risk-default")
+  userId                String    @unique
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dailyPnL              Float     @default(0)
+  monthlyPnL            Float     @default(0)
+  totalPnL              Float     @default(0)
+  peakCapital           Float
+  currentCapital        Float
+  consecutiveWins       Int       @default(0)
+  consecutiveLosses     Int       @default(0)
+  tradesExecuted        Int       @default(0)
+  lastDailyReset        DateTime  @default(now())
+  monthStartTime         DateTime  @default(now())
+  isPaused              Boolean   @default(false)
+  pauseUntil            DateTime?
+  permanentlyHalted     Boolean   @default(false)
+  updatedAt             DateTime  @updatedAt
 }
