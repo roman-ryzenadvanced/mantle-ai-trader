@@ -83,7 +83,7 @@ mantle-ai-trader/
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/mantle-ai-trader.git
+git clone https://github.com/roman-ryzenadvanced/mantle-ai-trader.git
 cd mantle-ai-trader
 
 # Install dependencies
@@ -265,7 +265,7 @@ This project is built for the Mantle Turing Test Hackathon:
 
 ## 📞 Support
 
-- GitHub Issues: [Report a bug](https://github.com/yourusername/mantle-ai-trader/issues)
+- GitHub Issues: [Report a bug](https://github.com/roman-ryzenadvanced/mantle-ai-trader/issues)
 - Telegram: [Mantle Hackathon Chat](https://t.me/MantleTuringTestHackathon)
 
 ---
