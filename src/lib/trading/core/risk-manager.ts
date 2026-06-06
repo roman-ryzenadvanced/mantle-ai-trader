@@ -222,7 +222,7 @@ export class RiskManager {
     const maxSize = portfolioValue * this.config.maxSinglePositionPct;
     const finalSize = Math.min(suggestedSize, maxSize);
 
-    if (finalSize < requestedSize && requestedSize !== undefined) {
+    if (requestedSize !== undefined && finalSize < requestedSize) {
       warnings.push(`Position size reduced from ${requestedSize} to ${finalSize.toFixed(2)}`);
     }
 

@@ -2,6 +2,77 @@
 
 All notable changes to the Mantle AI Trader project.
 
+## [v3.6.0] - 2026-06-08
+
+### Added
+- **Risk Management Engine** (from Polymarket-bot)
+  - 4-layer circuit breaker: daily loss limit (5%), monthly loss limit (15%), max drawdown (25%), total max loss (40%)
+  - Dynamic position sizing: auto-adjusts based on consecutive win/loss streaks
+  - RiskState model for circuit breaker persistence across sessions
+  - RiskPanel dashboard component with real-time risk metrics
+  - Circuit breaker status indicator (green/yellow/red)
+  - Pause countdown timer when limits are breached
+  - `canTrade()`, `calculatePositionSize()`, `recordTrade()`, `checkAutoReset()` pure functions
+
+- **Market Opportunity Scoring** (from Polymarket-bot)
+  - Weighted scoring formula: `volume * 0.4 + liquidity * 0.3 + spread * 0.3`
+  - Configurable filters: min volume, min liquidity, max spread
+  - Ranked market opportunity list with per-metric scores
+  - `scoreMarkets()` and `getDefaultScorerConfig()` exports
+
+- **Telegram Notification Service** (from Polymarket-bot)
+  - Telegram Bot API integration for trade alerts, P&L updates, risk warnings, and error notifications
+  - Markdown-formatted messages with emoji indicators per type
+  - `NotificationService` class with `sendTradeNotification()`, `sendPnlUpdate()`, `sendRiskAlert()`, `sendErrorAlert()`
+  - Connection test utility
+  - Per-user toggle in settings (telegramEnabled, telegramBotToken, notificationsOnTrade/RiskWarning/Error)
+
+- **Webhook Server** (from Polymarket-bot)
+  - POST `/api/webhook` endpoint for external trigger of analysis cycles
+  - Actions: `scan`, `risk_check`, `status`
+  - Bearer token auth via `WEBHOOK_SECRET` env var
+
+- **AI Chat Assistant** (inspired by CopilotKit)
+  - Floating chat widget (bottom-right) with Brain icon
+  - Spring animation on expand/collapse (framer-motion AnimatePresence)
+  - Chat message display: user (right, blue), AI (left, gray), system (center)
+  - Suggestion chips: "Analyze BTC", "Risk Check", "Explain Signal", "Market Overview"
+  - Markdown-rendered AI responses
+  - Auto-growing textarea input
+  - Unread message badge indicator
+  - `TradingCopilot` + `TradingCopilotLoader` (SSR-safe wrapper)
+
+- **Dashboard Layout Overhaul**
+  - New `Header` component: logo, DEMO/LIVE mode badge with pulse animation, user menu, sign-out
+  - Collapsible `Sidebar` navigation: Dashboard, Signals, Positions, Trades, Backtest, Settings, News, History
+  - Active route highlighting, mobile-responsive hamburger menu
+  - Glass-morphism dark theme throughout (backdrop-blur, semi-transparent backgrounds, subtle borders)
+
+- **Dashboard Overview Page** (`/dashboard`)
+  - `StatsRow`: 4 animated stat cards (Portfolio Value, Daily P&L, Total Trades, Win Rate)
+  - `AnimatedCounter`: framer-motion number counter with comma formatting
+  - `PnLChart`: recharts AreaChart with gradient fill (green/red based on P&L direction)
+  - `RiskPanel`: 6-metric risk dashboard (daily/monthly/total P&L, wins/losses, drawdown, circuit breaker)
+  - `ActivityLog`: real-time event feed with color-coded levels (TRADE, SIGNAL, ERROR, WARN, INFO)
+  - Quick Actions panel: Scan BTCUSDT, Refresh Data, Risk Check, Analytics
+
+- **Dedicated Pages**
+  - `/signals` — Signal grid with confidence meters, reasoning text, execute button
+  - `/positions` — Open positions table with P&L color coding, close button
+  - `/trades` — Trade history with status filter tabs (ALL/OPEN/CLOSED)
+  - `/backtest` — Backtest form + results + equity curve chart
+  - `/settings` — Trading mode, risk level, leverage, auto-trading, Telegram config
+  - `/news` — News feed with sentiment badges and breaking news highlighting
+  - `/history` — Session history tracking (placeholder)
+
+- **Confidence Scoring Enhancement**
+  - Confidence meters on signal cards (>70% green, 40-70% yellow, <40% red)
+  - Visual progress bars with color gradient
+
+### Changed
+- **Build fixes**: Exported `RateLimitConfig` from rate-limiter.ts, fixed `possibly undefined` type check in risk-manager.ts
+- **Prisma schema**: Added RiskState model, extended SystemLog with TRADE/SIGNAL levels and userId, added notification fields to UserSettings
+
 ## [v3.5.0] - 2026-06-07
 
 ### Added

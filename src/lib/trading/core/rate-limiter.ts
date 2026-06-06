@@ -11,7 +11,7 @@
 
 export type ApiType = 'BYBIT_PUBLIC' | 'BYBIT_PRIVATE' | 'NEWS_API' | 'GENERAL';
 
-interface RateLimitConfig {
+export interface RateLimitConfig {
   // Minimum time between requests (ms)
   minTime?: number;
   // Maximum concurrent requests

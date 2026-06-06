@@ -11,6 +11,9 @@
     <strong>Free Open Source Trading Bot</strong> • 
     <strong>Bybit Integration</strong> • 
     <strong>Real-time Signals</strong> • 
+    <strong>4-Layer Risk Management</strong> • 
+    <strong>AI Chat Assistant</strong> • 
+    <strong>Telegram Alerts</strong> • 
     <strong>Backtesting Engine</strong>
   </p>
   
@@ -30,7 +33,7 @@
     <img src="https://img.shields.io/badge/Language-TypeScript%205-blue?style=flat-square&logo=typescript" alt="TypeScript" />
     <img src="https://img.shields.io/badge/AI-z--ai--web--dev--sdk-purple?style=flat-square" alt="AI SDK" />
     <img src="https://img.shields.io/badge/Exchange-Bybit-orange?style=flat-square" alt="Bybit" />
-    <img src="https://img.shields.io/badge/Database-SQLite-blue?style=flat-square&logo=sqlite" alt="SQLite" />
+    <img src="https://img.shields.io/badge/Database-PostgreSQL-blue?style=flat-square&logo=postgresql" alt="PostgreSQL" />
   </p>
   
   <p><em>🏆 Built for <strong>Mantle Turing Test Hackathon</strong> - $120,000 Prize Pool</em></p>
@@ -87,12 +90,28 @@
 | **Technical Analysis** | RSI, MACD, SMA, EMA, Bollinger Bands |
 | **Pattern Recognition** | Doji, Hammer, Engulfing, Morning Star |
 | **Support/Resistance** | Automated level detection |
+| **Confidence Meters** | Visual confidence bars (green/yellow/red) with reasoning |
+
+### 🤖 AI Chat Assistant (CopilotKit-inspired)
+| Feature | Description |
+|---------|-------------|
+| **Floating Widget** | Expandable chat bubble with spring animations |
+| **Context-Aware** | Reads positions, signals, risk state |
+| **Markdown Responses** | Formatted AI analysis with structured data |
+| **Suggestion Chips** | Quick actions: Analyze BTC, Risk Check, Market Overview |
+| **Real-time Updates** | Streaming token-by-token display |
 
 ### 📰 Fundamental News Analysis
 - **Multi-Source Aggregation**: CryptoPanic, CoinGecko, CryptoCompare
 - **Sentiment Scoring**: Bullish/Bearish classification (-1 to 1)
 - **Real-time Updates**: Live news feed integration
 - **Impact Assessment**: News importance scoring
+
+### 📊 Market Opportunity Scoring
+- **Weighted Scoring**: `volume * 0.4 + liquidity * 0.3 + spread * 0.3`
+- **Configurable Filters**: Min volume, min liquidity, max spread
+- **Ranked Markets**: Auto-ranked by opportunity score (0-100)
+- **Smart Filtering**: Eliminates illiquid or high-spread markets
 
 ### 📊 Backtesting Engine
 - **Historical Simulation**: Test strategies on past data
@@ -111,6 +130,14 @@
 - **Testnet Mode**: Safe testing environment
 - **Order Types**: Market, Limit, Stop orders
 - **Position Management**: Leverage, margin, risk controls
+
+### 📱 Telegram Notifications
+- **Trade Alerts**: Instant notifications on trade execution
+- **P&L Updates**: Daily and session performance summaries
+- **Risk Warnings**: Alerts when approaching loss limits
+- **Error Alerts**: System error notifications
+- **Per-User Config**: Individual toggle and chat ID settings
+- **Webhook Server**: POST `/api/webhook` for external triggers
 
 ### 🛡️ 4-Layer Risk Management System
 | Layer | Protection | Default |
@@ -227,10 +254,15 @@ docker-compose up -d
 
 | Tab | Function |
 |-----|----------|
-| **Signals** | Generate and view AI trading signals |
+| **Dashboard** | Portfolio overview, P&L chart, risk metrics, activity log |
+| **Signals** | Generate and view AI trading signals with confidence meters |
 | **Positions** | Manage open positions and portfolio |
+| **Trades** | Trade history with filters |
 | **Backtest** | Run strategy simulations |
 | **News** | View market news with sentiment |
+| **Risk** | Detailed risk management dashboard |
+| **Notifications** | Configure Telegram alerts |
+| **Settings** | Trading mode, risk level, leverage, API keys |
 
 ### Supported Trading Pairs
 
@@ -364,13 +396,16 @@ mantle-ai-trader/
 ├── 📁 src/
 │   ├── 📁 app/
 │   │   ├── 📁 api/trading/     # REST API endpoints
-│   │   ├── 📄 layout.tsx       # Root layout with SEO
-│   │   └── 📄 page.tsx         # Main dashboard
+│   │   ├── 📁 api/webhook/     # Webhook trigger endpoint
+│   │   ├── 📄 layout.tsx       # Root layout with providers
+│   │   ├── 📄 page.tsx         # Main trading dashboard
+│   │   └── 📁 dashboard/       # New dashboard with overview/risk/analysis
 │   ├── 📁 lib/
 │   │   ├── 📁 trading/
 │   │   │   ├── 📁 core/        # Core trading infrastructure
 │   │   │   │   ├── 📄 types.ts         # Type definitions
 │   │   │   │   ├── 📄 risk-manager.ts  # 4-Layer risk management
+│   │   │   │   ├── 📄 market-scorer.ts # Market opportunity scoring
 │   │   │   │   ├── 📄 rate-limiter.ts  # API rate limiting
 │   │   │   │   ├── 📄 cache.ts         # TTL caching
 │   │   │   │   ├── 📄 error-handler.ts # Retry & circuit breaker
@@ -379,13 +414,20 @@ mantle-ai-trader/
 │   │   │   ├── 📁 signals/     # AI signal engine
 │   │   │   ├── 📁 news/        # News aggregator
 │   │   │   ├── 📁 backtest/    # Backtesting
-│   │   │   └── 📁 demo/        # Paper trading
+│   │   │   ├── 📁 demo/        # Paper trading
+│   │   │   └── 📁 risk/        # Risk engine (circuit breaker)
+│   │   ├── 📁 notifications/  # Telegram + notification service
 │   │   └── 📁 vector/          # VectorDB
-│   └── 📁 components/ui/       # UI components
+│   ├── 📁 components/
+│   │   ├── 📁 ai/              # TradingCopilot chat widget
+│   │   ├── 📁 dashboard/       # StatsRow, RiskPanel, PnLChart, AnimatedCounter
+│   │   ├── 📁 layout/          # Header, Sidebar, ModeBadge
+│   │   ├── 📁 risk/            # RiskPanel, CircuitBreakerStatus
+│   │   └── 📁 ui/              # shadcn/ui components
 ├── 📁 mini-services/
 │   └── 📁 trading-service/     # WebSocket service
 ├── 📁 prisma/
-│   └── 📄 schema.prisma        # Database schema
+│   └── 📄 schema.prisma        # Database schema (PostgreSQL)
 ├── 📁 public/                  # Static assets
 └── 📁 tests/                   # Test files
 ```
@@ -395,14 +437,15 @@ mantle-ai-trader/
 | Category | Technology |
 |----------|------------|
 | **Framework** | Next.js 16, TypeScript 5 |
-| **Styling** | Tailwind CSS 4, shadcn/ui |
-| **Database** | Prisma ORM, SQLite |
+| **Styling** | Tailwind CSS 4, shadcn/ui, Framer Motion |
+| **Database** | Prisma ORM, PostgreSQL |
 | **AI/ML** | z-ai-web-dev-sdk |
 | **Exchange** | Bybit API v5 |
 | **Real-time** | Socket.io |
 | **Charts** | Recharts |
 | **State** | Zustand, TanStack Query |
-| **Risk Management** | 4-Layer Protection System |
+| **Risk Management** | 4-Layer Circuit Breaker System |
+| **Notifications** | Telegram Bot API |
 | **Caching** | TTL-based with LRU eviction |
 | **Rate Limiting** | Token bucket algorithm |
 

@@ -1,6 +1,6 @@
 {
   "name": "mantle-ai-trader",
-  "version": "3.5.0",
+  "version": "3.6.0",
   "description": "AI-powered cryptocurrency trading platform with multi-exchange monitoring, professional order management, backtesting, and demo/live trading modes",
   "main": "src/app/page.tsx",
   "scripts": {
