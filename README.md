@@ -1,7 +1,7 @@
 <div align="center">
   
   <!-- Main Banner -->
-  <img src="https://img.shields.io/badge/Mantle%20AI%20Trader-🤖%20AI%20Crypto%20Trading%20Bot-blue?style=for-the-badge&logo=robot&logoColor=white&labelColor=1a1a2e&color=16213e" alt="Mantle AI Trader - AI-Powered Crypto Trading Bot" />
+  <img src="./public/cover.png" alt="Mantle AI Trader Cover" width="100%" style="border-radius: 16px; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);" />
   
   <h1>🤖 Mantle AI Trader</h1>
   

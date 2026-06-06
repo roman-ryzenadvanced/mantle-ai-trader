@@ -186,7 +186,7 @@ export class NewsAggregator {
         content: post.body as string || undefined,
         source: NewsSource.CRYPTOPANIC,
         sourceUrl: post.url as string,
-        author: post.source?.domain as string || undefined,
+        author: (post.source as any)?.domain as string || undefined,
         category: this.categorizeArticle(post.title as string),
         sentiment: this.analyzeSentiment(`${post.title} ${post.body || ''}`),
         importance: this.calculateImportance(post),
@@ -223,15 +223,15 @@ export class NewsAggregator {
 
       return response.data.status_updates.map((update: Record<string, unknown>): NewsArticle => ({
         id: `cg-${update.id}`,
-        title: (update.project?.name as string) + ' Status Update',
+        title: ((update.project as any)?.name as string) + ' Status Update',
         content: update.description as string,
         source: NewsSource.COINGECKO,
-        sourceUrl: `https://www.coingecko.com/en/coins/${update.project?.id}`,
-        author: update.project?.name as string || 'CoinGecko',
+        sourceUrl: `https://www.coingecko.com/en/coins/${(update.project as any)?.id}`,
+        author: (update.project as any)?.name as string || 'CoinGecko',
         category: 'Project Updates',
         sentiment: this.analyzeSentiment(update.description as string),
         importance: 0.6,
-        tags: [update.project?.symbol as string, 'status-update'],
+        tags: [(update.project as any)?.symbol as string, 'status-update'],
         publishedAt: new Date(update.created_at as string),
         fetchedAt: new Date(),
         processed: false

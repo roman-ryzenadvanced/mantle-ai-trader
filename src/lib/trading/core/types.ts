@@ -355,6 +355,7 @@ export interface BacktestResult {
   pnlPercent?: number;
   executedAt: Date;
   closedAt?: Date;
+  notes?: string;
 }
 
 export interface BacktestSession {
@@ -426,6 +427,7 @@ export interface BybitOrderResponse {
   cumExecFee: string;
   createdTime: string;
   updatedTime: string;
+  avgPrice?: string;
 }
 
 export interface BybitPositionResponse {

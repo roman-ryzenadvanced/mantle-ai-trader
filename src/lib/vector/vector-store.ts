@@ -177,7 +177,7 @@ export class VectorStore {
 
     const ids: string[] = [];
     const embeddings: number[][] = [];
-    const metadatas: Record<string, unknown>[] = [];
+    const metadatas: Record<string, string | number | boolean>[] = [];
     const documents: string[] = [];
 
     articles.forEach(article => {

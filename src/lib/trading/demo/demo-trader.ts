@@ -18,7 +18,8 @@ import {
   TradeAction,
   OrderType,
   OrderStatus,
-  Ticker
+  Ticker,
+  PositionSide
 } from '../core/types';
 
 // ==================== CIRCUIT BREAKER ====================
@@ -763,7 +764,7 @@ export class DemoTrader {
     this.portfolio.positions = Array.from(this.positions.values()).map(p => ({
       id: p.id,
       symbol: p.symbol,
-      side: p.side,
+      side: p.side as PositionSide,
       quantity: p.quantity,
       avgEntryPrice: p.avgEntryPrice,
       currentPrice: p.currentPrice,

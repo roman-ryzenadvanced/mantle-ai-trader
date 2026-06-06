@@ -8,7 +8,7 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import { signalEngine } from '../../src/lib/trading/signals/signal-engine';
 import { demoTrader } from '../../src/lib/trading/demo/demo-trader';
 import { newsAggregator } from '../../src/lib/trading/news/news-aggregator';
-import { TradeAction, TimeFrame } from '../../src/lib/trading/core/types';
+import { TradeAction, TimeFrame, OrderType } from '../../src/lib/trading/core/types';
 
 interface SignalSubscription {
   symbol: string;
@@ -72,7 +72,7 @@ export class TradingWebSocketService {
           const order = demoTrader.placeOrder({
             symbol: data.symbol,
             side: data.side,
-            type: data.type,
+            type: data.type as OrderType,
             quantity: data.quantity,
             price: data.price
           });

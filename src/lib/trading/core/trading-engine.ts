@@ -20,7 +20,8 @@ import {
   BybitKlineResponse,
   BybitOrderResponse,
   BybitPositionResponse,
-  APIResponse
+  APIResponse,
+  PositionSide
 } from './types';
 
 // Bybit API endpoints
@@ -498,7 +499,7 @@ export class BybitClient {
       .map(data => ({
         id: `${data.symbol}-${data.side}`,
         symbol: data.symbol,
-        side: data.side === 'Buy' ? 'LONG' as const : 'SHORT' as const,
+        side: data.side === 'Buy' ? PositionSide.LONG : PositionSide.SHORT,
         quantity: parseFloat(data.size),
         avgEntryPrice: parseFloat(data.avgPrice),
         currentPrice: parseFloat(data.avgPrice), // Would need to fetch current price separately
