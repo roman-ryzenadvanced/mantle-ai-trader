@@ -1,14 +1,46 @@
+# https://www.robotstxt.org/robotstxt.html
+# Sitemap
+Sitemap: https://github.com/roman-ryzenadvanced/mantle-ai-trader/sitemap.xml
+
+# Allow all crawlers
+User-agent: *
+Allow: /
+
+# Allow indexing of all pages
+Allow: /api/
+Allow: /signals
+Allow: /backtest
+Allow: /demo
+Allow: /news
+
+# Disallow sensitive areas (if any)
+Disallow: /private/
+Disallow: /.env
+
+# Crawl-delay for respectful crawling
+Crawl-delay: 1
+
+# Specific rules for major search engines
 User-agent: Googlebot
 Allow: /
+Crawl-delay: 0
 
 User-agent: Bingbot
 Allow: /
+Crawl-delay: 1
 
-User-agent: Twitterbot
+User-agent: DuckDuckBot
 Allow: /
+Crawl-delay: 1
 
-User-agent: facebookexternalhit
+User-agent: Slurp
 Allow: /
+Crawl-delay: 1
 
-User-agent: *
+User-agent: Baiduspider
 Allow: /
+Crawl-delay: 2
+
+User-agent: YandexBot
+Allow: /
+Crawl-delay: 2

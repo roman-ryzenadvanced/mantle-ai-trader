@@ -1,0 +1,58 @@
+{
+  "name": "Mantle AI Trader",
+  "short_name": "MantleAI",
+  "description": "AI-powered cryptocurrency trading bot with news sentiment analysis, technical indicators, backtesting, and paper trading.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#3b82f6",
+  "orientation": "any",
+  "scope": "/",
+  "lang": "en-US",
+  "categories": ["finance", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/dashboard-screenshot.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "label": "Mantle AI Trader Dashboard"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Generate Signal",
+      "url": "/?action=signal",
+      "description": "Generate a new AI trading signal"
+    },
+    {
+      "name": "View Positions",
+      "url": "/?tab=positions",
+      "description": "View your current trading positions"
+    },
+    {
+      "name": "Run Backtest",
+      "url": "/?tab=backtest",
+      "description": "Run a strategy backtest"
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false
+}

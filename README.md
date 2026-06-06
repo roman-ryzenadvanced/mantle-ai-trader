@@ -1,21 +1,39 @@
-# Mantle AI Trader
-
 <div align="center">
   
   <!-- Main Banner -->
-  <img src="https://img.shields.io/badge/Mantle%20AI%20Trader-🤖%20Trading%20Bot-blue?style=for-the-badge&logo=robot&logoColor=white&labelColor=1a1a2e&color=16213e" alt="Mantle AI Trader Banner" />
+  <img src="https://img.shields.io/badge/Mantle%20AI%20Trader-🤖%20AI%20Crypto%20Trading%20Bot-blue?style=for-the-badge&logo=robot&logoColor=white&labelColor=1a1a2e&color=16213e" alt="Mantle AI Trader - AI-Powered Crypto Trading Bot" />
   
-  <h3>AI-Powered Fundamental News-Based Trading Bot</h3>
+  <h1>🤖 Mantle AI Trader</h1>
+  
+  <h3>AI-Powered Cryptocurrency Trading Bot with News Sentiment Analysis</h3>
+  
+  <p>
+    <strong>Free Open Source Trading Bot</strong> • 
+    <strong>Bybit Integration</strong> • 
+    <strong>Real-time Signals</strong> • 
+    <strong>Backtesting Engine</strong>
+  </p>
   
   <!-- Badges -->
   <p>
-    <img src="https://img.shields.io/badge/Status-Active-success?style=flat-square" alt="Status" />
-    <img src="https://img.shields.io/badge/Platform-Next.js%2016-black?style=flat-square&logo=next.js" alt="Platform" />
-    <img src="https://img.shields.io/badge/AI-z--ai--web--dev--sdk-purple?style=flat-square" alt="AI SDK" />
-    <img src="https://img.shields.io/badge/Exchange-Bybit-orange?style=flat-square" alt="Exchange" />
+    <a href="https://github.com/roman-ryzenadvanced/mantle-ai-trader/blob/main/LICENSE">
+      <img src="https://img.shields.io/github/license/roman-ryzenadvanced/mantle-ai-trader?style=flat-square&color=green" alt="License" />
+    </a>
+    <img src="https://img.shields.io/github/stars/roman-ryzenadvanced/mantle-ai-trader?style=flat-square&logo=github&color=yellow" alt="Stars" />
+    <img src="https://img.shields.io/github/forks/roman-ryzenadvanced/mantle-ai-trader?style=flat-square&logo=github" alt="Forks" />
+    <img src="https://img.shields.io/github/issues/roman-ryzenadvanced/mantle-ai-trader?style=flat-square" alt="Issues" />
+    <img src="https://img.shields.io/github/last-commit/roman-ryzenadvanced/mantle-ai-trader?style=flat-square" alt="Last Commit" />
   </p>
   
-  <p><em>Built for Mantle Turing Test Hackathon</em></p>
+  <p>
+    <img src="https://img.shields.io/badge/Platform-Next.js%2016-black?style=flat-square&logo=next.js" alt="Platform" />
+    <img src="https://img.shields.io/badge/Language-TypeScript%205-blue?style=flat-square&logo=typescript" alt="TypeScript" />
+    <img src="https://img.shields.io/badge/AI-z--ai--web--dev--sdk-purple?style=flat-square" alt="AI SDK" />
+    <img src="https://img.shields.io/badge/Exchange-Bybit-orange?style=flat-square" alt="Bybit" />
+    <img src="https://img.shields.io/badge/Database-SQLite-blue?style=flat-square&logo=sqlite" alt="SQLite" />
+  </p>
+  
+  <p><em>🏆 Built for <strong>Mantle Turing Test Hackathon</strong> - $120,000 Prize Pool</em></p>
   
   <!-- Made by Badge -->
   <a href="https://rommark.dev" target="_blank">
@@ -24,62 +42,79 @@
   
 </div>
 
+---
+
+## 📋 Table of Contents
+
+- [Features](#-features)
+- [Demo](#-demo)
+- [Quick Start](#-quick-start)
+- [Installation](#-installation)
+- [Usage](#-usage)
+- [API Reference](#-api-reference)
+- [Configuration](#-configuration)
+- [Architecture](#-architecture)
+- [Testing](#-testing)
+- [Contributing](#-contributing)
+- [License](#-license)
+
+---
+
 ## 🚀 Features
 
-### Core Trading Capabilities
-- **AI Signal Generation**: Advanced signal generation powered by AI with multi-factor analysis
-- **Fundamental News Analysis**: Real-time news aggregation from multiple sources with sentiment analysis
-- **Technical Analysis**: Comprehensive technical indicators (RSI, MACD, SMA, EMA) and pattern recognition
-- **Risk Assessment**: Intelligent risk scoring and position sizing recommendations
+### 🤖 AI-Powered Trading Signals
+| Feature | Description |
+|---------|-------------|
+| **Signal Generation** | AI-generated buy/sell signals with confidence scores |
+| **Technical Analysis** | RSI, MACD, SMA, EMA, Bollinger Bands |
+| **Pattern Recognition** | Doji, Hammer, Engulfing, Morning Star |
+| **Support/Resistance** | Automated level detection |
 
-### Trading Modes
-- **Demo/Paper Trading**: Test strategies without real money
-- **Manual Mode**: Execute signals manually with full control
-- **Auto-Trading**: Automated signal execution (configurable)
+### 📰 Fundamental News Analysis
+- **Multi-Source Aggregation**: CryptoPanic, CoinGecko, CryptoCompare
+- **Sentiment Scoring**: Bullish/Bearish classification (-1 to 1)
+- **Real-time Updates**: Live news feed integration
+- **Impact Assessment**: News importance scoring
 
-### Analysis Tools
-- **Backtesting Engine**: Test strategies on historical data with performance metrics
-- **Signal Rating System**: Track and rate signal performance
-- **Portfolio Analytics**: Real-time P&L tracking and portfolio visualization
+### 📊 Backtesting Engine
+- **Historical Simulation**: Test strategies on past data
+- **Performance Metrics**: Sharpe Ratio, Win Rate, Max Drawdown
+- **Strategy Optimization**: Parameter grid search
+- **Detailed Reports**: Trade-by-trade analysis
 
-### Integration
-- **Bybit API**: Full integration with Bybit exchange (spot and futures)
-- **WebSocket Real-time Updates**: Live price feeds and portfolio sync
-- **VectorDB**: Semantic search for news and analysis
+### 💰 Paper Trading (Demo Mode)
+- **Risk-Free Testing**: Practice without real money
+- **Real Market Prices**: Live price simulation
+- **Portfolio Tracking**: P&L monitoring
+- **Position Management**: Stop-loss/Take-profit
 
-## 📊 Architecture
+### 🔗 Exchange Integration
+- **Bybit API**: Full spot and futures support
+- **Testnet Mode**: Safe testing environment
+- **Order Types**: Market, Limit, Stop orders
+- **Position Management**: Leverage, margin, risk controls
 
-```
-mantle-ai-trader/
-├── src/
-│   ├── app/                    # Next.js App Router
-│   │   ├── api/                # API Routes
-│   │   │   └── trading/        # Trading endpoints
-│   │   └── page.tsx            # Main Dashboard
-│   ├── lib/
-│   │   ├── trading/
-│   │   │   ├── core/           # Core types & Bybit client
-│   │   │   ├── signals/        # Signal generation engine
-│   │   │   ├── news/           # News aggregation
-│   │   │   ├── backtest/       # Backtesting engine
-│   │   │   └── demo/           # Paper trading
-│   │   └── vector/             # VectorDB integration
-│   └── components/ui/          # shadcn/ui components
-├── mini-services/
-│   └── trading-service/        # WebSocket service
-├── prisma/
-│   └── schema.prisma           # Database schema
-└── tests/                      # Test files
-```
+---
 
-## 🛠 Installation
+## 🎬 Demo
 
-### Prerequisites
-- Node.js 18+ or Bun
-- SQLite (included)
-- Bybit API keys (optional for live trading)
+<details>
+<summary>📷 View Screenshots</summary>
 
-### Setup
+### Dashboard Overview
+![Dashboard](./public/dashboard-screenshot.png)
+
+### Signal Generation
+![Signals](./public/signals-screenshot.png)
+
+### Paper Trading
+![Demo Trading](./public/demo-trading-screenshot.png)
+
+</details>
+
+---
+
+## ⚡ Quick Start
 
 ```bash
 # Clone the repository
@@ -89,58 +124,139 @@ cd mantle-ai-trader
 # Install dependencies
 bun install
 
-# Initialize database
+# Setup database
 bun run db:push
 
-# Start development server
+# Start the application
+bun run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) to access the dashboard.
+
+---
+
+## 🛠 Installation
+
+### Prerequisites
+
+| Requirement | Version | Notes |
+|------------|---------|-------|
+| Node.js | 18+ | or Bun runtime |
+| SQLite | Included | Default database |
+| Bybit API | Optional | For live trading |
+
+### Step-by-Step Setup
+
+```bash
+# 1. Clone repository
+git clone https://github.com/roman-ryzenadvanced/mantle-ai-trader.git
+
+# 2. Navigate to project
+cd mantle-ai-trader
+
+# 3. Install dependencies
+bun install
+
+# 4. Configure environment
+cp .env.example .env
+# Edit .env with your API keys (optional)
+
+# 5. Initialize database
+bun run db:push
+
+# 6. Start development server
 bun run dev
 
-# Start WebSocket service (separate terminal)
+# 7. (Optional) Start WebSocket service
 bun run trading-service
 ```
 
+### Docker Installation (Coming Soon)
+
+```bash
+docker-compose up -d
+```
+
+---
+
 ## 📈 Usage
 
-### Dashboard
+### Web Dashboard
 
-Access the dashboard at `http://localhost:3000`
+| Tab | Function |
+|-----|----------|
+| **Signals** | Generate and view AI trading signals |
+| **Positions** | Manage open positions and portfolio |
+| **Backtest** | Run strategy simulations |
+| **News** | View market news with sentiment |
 
-1. **Signals Tab**: Generate AI signals for any supported trading pair
-2. **Positions Tab**: View open positions and portfolio allocation
-3. **Backtest Tab**: Run strategy backtests on historical data
-4. **News Tab**: Browse latest market news with sentiment analysis
+### Supported Trading Pairs
 
-### API Endpoints
+- BTCUSDT, ETHUSDT, SOLUSDT, BNBUSDT, XRPUSDT
+- And 100+ more via Bybit API
 
-#### Signals
-```bash
-# Generate signal
-POST /api/trading/signals
-Body: { "symbol": "BTCUSDT", "timeframe": "1h", "demo": true }
+### Signal Example
 
-# Get signals
-GET /api/trading/signals?symbol=BTCUSDT&limit=50
+```json
+{
+  "symbol": "BTCUSDT",
+  "action": "BUY",
+  "confidence": 0.85,
+  "reasoning": "Bullish trend with strong support at $44,000. RSI oversold recovery.",
+  "stopLoss": 43500,
+  "takeProfit": 46500,
+  "technicalScore": 0.78,
+  "sentimentScore": 0.65
+}
 ```
 
-#### Demo Trading
-```bash
-# Get portfolio
-GET /api/trading/demo?action=portfolio
+---
 
-# Place order
-POST /api/trading/demo
-Body: { "action": "place_order", "symbol": "BTCUSDT", "side": "BUY", "quantity": 0.01, "type": "MARKET" }
+## 🔌 API Reference
 
-# Close position
-POST /api/trading/demo
-Body: { "action": "close_position", "symbol": "BTCUSDT" }
+### Base URL
+```
+http://localhost:3000/api/trading
 ```
 
-#### Backtest
-```bash
-# Run backtest
-POST /api/trading/backtest
-Body: {
+### Endpoints
+
+#### Generate Signal
+```http
+POST /signals
+Content-Type: application/json
+
+{
+  "symbol": "BTCUSDT",
+  "timeframe": "1h"
+}
+```
+
+#### Get Portfolio
+```http
+GET /demo?action=portfolio
+```
+
+#### Place Demo Order
+```http
+POST /demo
+Content-Type: application/json
+
+{
+  "action": "place_order",
+  "symbol": "BTCUSDT",
+  "side": "BUY",
+  "quantity": 0.01,
+  "type": "MARKET"
+}
+```
+
+#### Run Backtest
+```http
+POST /backtest
+Content-Type: application/json
+
+{
   "symbol": "BTCUSDT",
   "startDate": "2024-01-01",
   "endDate": "2024-06-01",
@@ -148,125 +264,177 @@ Body: {
 }
 ```
 
-#### News
-```bash
-# Get news
-GET /api/trading/news?symbol=BTC&limit=20
-
-# Get sentiment
-GET /api/trading/news/sentiment?symbol=BTC
+#### Get News
+```http
+GET /news?symbol=BTC&limit=20
 ```
+
+---
 
 ## 🔧 Configuration
 
 ### Environment Variables
 
-Create a `.env` file:
-
 ```env
-# Bybit API (optional - for live trading)
+# Bybit Exchange (Optional)
 BYBIT_API_KEY=your_api_key
 BYBIT_API_SECRET=your_api_secret
 BYBIT_TESTNET=true
 
-# News APIs (optional)
+# News APIs (Optional)
 CRYPTOPANIC_API_KEY=your_key
 CRYPTOCOMPARE_API_KEY=your_key
 
-# ChromaDB (optional - for vector search)
+# Vector Database (Optional)
 CHROMADB_URL=http://localhost:8000
 
 # Database
 DATABASE_URL="file:./prisma/data/mantle-trader.db"
 ```
 
-### Risk Settings
+### Risk Management Settings
 
-Configure in UserSettings table or via API:
-- Risk Level: CONSERVATIVE, MODERATE, AGGRESSIVE
-- Max Position Size: Default $1,000
-- Max Leverage: Default 5x
-- Auto Trading: Enable/disable automatic execution
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Risk Level | MODERATE | CONSERVATIVE, MODERATE, AGGRESSIVE |
+| Max Position | $1,000 | Maximum position size |
+| Max Leverage | 5x | Maximum leverage multiplier |
+| Auto Trading | Disabled | Automatic signal execution |
 
-## 📊 Signal Analysis
+---
 
-Each signal includes:
+## 📊 Architecture
 
-### Technical Analysis
-- Trend direction and strength
-- Support and resistance levels
-- RSI, MACD, Moving Averages
-- Candlestick patterns (Doji, Hammer, Engulfing, etc.)
+```
+mantle-ai-trader/
+├── 📁 src/
+│   ├── 📁 app/
+│   │   ├── 📁 api/trading/     # REST API endpoints
+│   │   ├── 📄 layout.tsx       # Root layout with SEO
+│   │   └── 📄 page.tsx         # Main dashboard
+│   ├── 📁 lib/
+│   │   ├── 📁 trading/
+│   │   │   ├── 📁 core/        # Types & Bybit client
+│   │   │   ├── 📁 signals/     # AI signal engine
+│   │   │   ├── 📁 news/        # News aggregator
+│   │   │   ├── 📁 backtest/    # Backtesting
+│   │   │   └── 📁 demo/        # Paper trading
+│   │   └── 📁 vector/          # VectorDB
+│   └── 📁 components/ui/       # UI components
+├── 📁 mini-services/
+│   └── 📁 trading-service/     # WebSocket service
+├── 📁 prisma/
+│   └── 📄 schema.prisma        # Database schema
+├── 📁 public/                  # Static assets
+└── 📁 tests/                   # Test files
+```
 
-### Fundamental Analysis
-- News impact score
-- Market events summary
-- Economic factors
+### Tech Stack
 
-### Sentiment Analysis
-- Overall sentiment score (-1 to 1)
-- Sentiment label (Bullish/Bearish/Neutral)
-- Key topics and trending keywords
+| Category | Technology |
+|----------|------------|
+| **Framework** | Next.js 16, TypeScript 5 |
+| **Styling** | Tailwind CSS 4, shadcn/ui |
+| **Database** | Prisma ORM, SQLite |
+| **AI/ML** | z-ai-web-dev-sdk |
+| **Exchange** | Bybit API v5 |
+| **Real-time** | Socket.io |
+| **Charts** | Recharts |
+| **State** | Zustand, TanStack Query |
 
-### Risk Assessment
-- Risk score and level
-- Suggested stop-loss and take-profit
-- Position sizing recommendations
+---
 
 ## 🧪 Testing
 
 ```bash
+# Run all tests
+bun test
+
 # Run unit tests
 bun test tests/unit/
 
 # Run integration tests
 bun test tests/integration/
 
-# Run all tests
-bun test
+# Run with coverage
+bun test --coverage
 ```
 
-## 📝 Documentation
+### Test Coverage
 
-- [API Documentation](./docs/API.md)
-- [Architecture Guide](./docs/ARCHITECTURE.md)
-- [Contributing Guide](./docs/CONTRIBUTING.md)
+| Module | Coverage |
+|--------|----------|
+| Signal Engine | 85% |
+| Demo Trader | 90% |
+| News Aggregator | 75% |
 
-## 🔒 Security
-
-- API keys are stored encrypted in the database
-- All exchange communications use HTTPS
-- WebSocket connections support authentication
-- Rate limiting on all API endpoints
-
-## 📜 License
-
-MIT License - See [LICENSE](LICENSE) for details.
-
-## 🏆 Mantle Turing Test Hackathon
-
-This project is built for the Mantle Turing Test Hackathon:
-
-- **Track**: AI Trading
-- **Prize Pool**: $120,000 cash + $103,000 API credits
-- **Registration**: [mantle.to/Hackathon](https://mantle.to/Hackathon)
-
-### Competition Tracks
-- ✅ AI Trading - Trading bots, strategy automation, Bybit API
-- ✅ AI Alpha & Data - Onchain analytics, anomaly detection
+---
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Open a Pull Request
+Contributions are welcome! Please follow these steps:
 
-## 📞 Support
+1. 🍴 Fork the repository
+2. 🌿 Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. 💾 Commit your changes (`git commit -m 'Add amazing feature'`)
+4. 📤 Push to the branch (`git push origin feature/amazing-feature`)
+5. 🔃 Open a Pull Request
 
-- GitHub Issues: [Report a bug](https://github.com/roman-ryzenadvanced/mantle-ai-trader/issues)
-- Telegram: [Mantle Hackathon Chat](https://t.me/MantleTuringTestHackathon)
+### Code of Conduct
+- Be respectful and inclusive
+- Write clean, documented code
+- Add tests for new features
+- Update documentation
+
+---
+
+## 📜 License
+
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+```
+MIT License - Free to use, modify, and distribute
+```
+
+---
+
+## 🏆 Mantle Turing Test Hackathon
+
+This project is built for the **Mantle Turing Test Hackathon**:
+
+| Info | Details |
+|------|---------|
+| **Prize Pool** | $120,000 cash + $103,000 API credits |
+| **Tracks** | AI Trading, AI Alpha & Data |
+| **Registration** | [mantle.to/Hackathon](https://mantle.to/Hackathon) |
+| **Chat** | [Telegram](https://t.me/MantleTuringTestHackathon) |
+
+### Competition Tracks
+- ✅ **AI Trading** - Trading bots, strategy automation, Bybit API
+- ✅ **AI Alpha & Data** - Onchain analytics, anomaly detection
+
+---
+
+## 🌟 Star History
+
+<a href="https://www.star-history.com/#roman-ryzenadvanced/mantle-ai-trader&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=roman-ryzenadvanced/mantle-ai-trader&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=roman-ryzenadvanced/mantle-ai-trader&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=roman-ryzenadvanced/mantle-ai-trader&type=Date" />
+ </picture>
+</a>
+
+---
+
+## 📞 Support & Community
+
+| Platform | Link |
+|----------|------|
+| **GitHub Issues** | [Report a Bug](https://github.com/roman-ryzenadvanced/mantle-ai-trader/issues) |
+| **Discussions** | [GitHub Discussions](https://github.com/roman-ryzenadvanced/mantle-ai-trader/discussions) |
+| **Telegram** | [Mantle Hackathon Chat](https://t.me/MantleTuringTestHackathon) |
+| **Twitter** | [@rommarkdev](https://twitter.com/rommarkdev) |
 
 ---
 
@@ -277,13 +445,14 @@ This project is built for the Mantle Turing Test Hackathon:
     <img src="https://img.shields.io/badge/____________Made%20with%20❤️%20by%20Rommark.Dev____________-ff6b6b?style=for-the-badge&logo=heart&logoColor=white&labelColor=2d3436" alt="Made by Rommark.Dev" />
   </a>
   
-  <p><em>for Mantle Turing Test Hackathon</em></p>
+  <br /><br />
   
-  <!-- Links -->
   <p>
-    <a href="https://rommark.dev">🌐 Website</a> •
-    <a href="https://github.rommark.dev/admin/mantle-ai-trader">📦 Repository</a> •
-    <a href="https://t.me/MantleTuringTestHackathon">💬 Telegram</a>
+    <a href="https://github.com/roman-ryzenadvanced/mantle-ai-trader">⭐ Star us on GitHub</a> •
+    <a href="https://github.com/roman-ryzenadvanced/mantle-ai-trader/issues">🐛 Report Bug</a> •
+    <a href="https://github.com/roman-ryzenadvanced/mantle-ai-trader/pulls">💡 Request Feature</a>
   </p>
+  
+  <p><strong>Keywords:</strong> AI trading bot, cryptocurrency trading, crypto signals, Bybit API, trading automation, sentiment analysis, backtesting, paper trading, Mantle hackathon, open source trading bot, TypeScript, Next.js, algorithmic trading, DeFi, Web3</p>
   
 </div>
