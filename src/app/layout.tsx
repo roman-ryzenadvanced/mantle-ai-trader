@@ -17,10 +17,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL('https://github.com/roman-ryzenadvanced/mantle-ai-trader'),
   title: {
-    default: "Mantle AI Trader | AI-Powered Crypto Trading Bot with News Analysis",
+    default: "Mantle AI Trader | Multi-Exchange Crypto Trading Platform",
     template: "%s | Mantle AI Trader"
   },
-  description: "Advanced AI trading bot for cryptocurrency markets. FOR EDUCATIONAL PURPOSES ONLY. Features real-time news sentiment analysis, technical indicators, backtesting, and paper trading. Built for Mantle Turing Test Hackathon with Bybit integration.",
+  description: "AI-powered cryptocurrency trading platform with multi-exchange volume monitoring, professional order management, backtesting, demo/live trading, news sentiment analysis, and 10+ technical indicators. FOR EDUCATIONAL PURPOSES ONLY.",
   keywords: [
     // Primary keywords
     "AI trading bot",
@@ -84,8 +84,8 @@ export const metadata: Metadata = {
     canonical: "https://github.com/roman-ryzenadvanced/mantle-ai-trader",
   },
   openGraph: {
-    title: "Mantle AI Trader | AI-Powered Crypto Trading Bot (Educational)",
-    description: "Advanced AI trading bot with news sentiment analysis, technical indicators, backtesting, and paper trading. FOR EDUCATIONAL PURPOSES ONLY. Built for Mantle Turing Test Hackathon.",
+    title: "Mantle AI Trader | Multi-Exchange Crypto Trading Platform",
+    description: "AI-powered cryptocurrency trading platform with multi-exchange volume monitoring, professional order management, backtesting, and demo/live trading. FOR EDUCATIONAL PURPOSES ONLY.",
     url: "https://github.com/roman-ryzenadvanced/mantle-ai-trader",
     siteName: "Mantle AI Trader",
     images: [
@@ -101,8 +101,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Mantle AI Trader | AI-Powered Crypto Trading Bot (Educational)",
-    description: "Advanced AI trading bot with news sentiment analysis, technical indicators, and backtesting. FOR EDUCATIONAL PURPOSES ONLY.",
+    title: "Mantle AI Trader | Multi-Exchange Crypto Trading Platform",
+    description: "AI-powered cryptocurrency trading platform with multi-exchange volume monitoring, professional order management, backtesting, and demo/live trading. FOR EDUCATIONAL PURPOSES ONLY.",
     images: ["/og-image.png"],
     creator: "@rommarkdev",
     site: "@rommarkdev",

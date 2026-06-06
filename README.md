@@ -3,15 +3,16 @@
   <!-- Main Banner -->
   <img src="./public/cover.png" alt="Mantle AI Trader Cover" width="100%" style="border-radius: 16px; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);" />
   
-  <h1>🤖 Mantle AI Trader</h1>
+  <h1>Mantle AI Trader</h1>
   
-  <h3>AI-Powered Cryptocurrency Trading Bot with News Sentiment Analysis</h3>
+  <h3>AI-Powered Cryptocurrency Trading Platform with Multi-Exchange Monitoring</h3>
   
   <p>
-    <strong>Free Open Source Trading Bot</strong> • 
-    <strong>Bybit Integration</strong> • 
-    <strong>Real-time Signals</strong> • 
-    <strong>Backtesting Engine</strong>
+    <strong>Free Open Source Trading Bot</strong> &bull;
+    <strong>Multi-Exchange</strong> &bull;
+    <strong>Real-time Signals</strong> &bull;
+    <strong>Volume Monitoring</strong> &bull;
+    <strong>Backtesting</strong>
   </p>
   
   <!-- Badges -->
@@ -29,12 +30,12 @@
     <img src="https://img.shields.io/badge/Platform-Next.js%2016-black?style=flat-square&logo=next.js" alt="Platform" />
     <img src="https://img.shields.io/badge/Language-TypeScript%205-blue?style=flat-square&logo=typescript" alt="TypeScript" />
     <img src="https://img.shields.io/badge/AI-z--ai--web--dev--sdk-purple?style=flat-square" alt="AI SDK" />
-    <img src="https://img.shields.io/badge/Exchange-Bybit-orange?style=flat-square" alt="Bybit" />
-    <img src="https://img.shields.io/badge/Database-SQLite-blue?style=flat-square&logo=sqlite" alt="SQLite" />
+    <img src="https://img.shields.io/badge/Exchanges-Bybit%20%7C%20Binance%20%7C%20OKX%20%7C%20Gate.io%20%7C%20Bitget-orange?style=flat-square" alt="Exchanges" />
+    <img src="https://img.shields.io/badge/Database-PostgreSQL-blue?style=flat-square&logo=postgresql" alt="PostgreSQL" />
     <img src="https://img.shields.io/badge/Tests-620+%20passing-brightgreen?style=flat-square" alt="Tests" />
   </p>
   
-  <p><em>🏆 Built for <strong>Mantle Turing Test Hackathon</strong> - $120,000 Prize Pool</em></p>
+  <p><em>Built for <strong>Mantle Turing Test Hackathon</strong></em></p>
   
   <!-- Made by Badge -->
   <a href="https://rommark.dev" target="_blank">
@@ -45,129 +46,120 @@
 
 ---
 
-## 📋 Table of Contents
+## Risk Disclaimer
 
-- [⚠️ Risk Disclaimer](#️-risk-disclaimer)
-- [Features](#-features)
-- [Demo](#-demo)
-- [Quick Start](#-quick-start)
-- [Installation](#-installation)
-- [Usage](#-usage)
-- [API Reference](#-api-reference)
-- [Configuration](#-configuration)
-- [Architecture](#-architecture)
-- [Testing](#-testing)
-- [Contributing](#-contributing)
-- [License](#-license)
+> **CRITICAL WARNING - READ BEFORE USE**
+>
+> This software is for **EDUCATIONAL and DEMONSTRATION purposes ONLY**.
+>
+> - Trading involves substantial risk of loss. You could lose your entire investment.
+> - Past performance does NOT guarantee future results.
+> - AI signals are algorithmic suggestions, NOT financial advice.
+> - Paper trading (demo mode) is strongly recommended before any live trading.
+> - **NEVER trade with money you cannot afford to lose.**
+>
+> Read the full [DISCLAIMER.md](./DISCLAIMER.md) before using this software.
 
 ---
 
-## ⚠️ Risk Disclaimer
+## Features
 
-> **🚨 CRITICAL WARNING - READ BEFORE USE 🚨**
->
-> **This software is for EDUCATIONAL and DEMONSTRATION purposes ONLY.**
->
-> - **TRADING INVOLVES SUBSTANTIAL RISK**: You could lose ALL your investment.
-> - **NO GUARANTEE OF PROFITS**: Past performance does NOT guarantee future results.
-> - **NOT FINANCIAL ADVICE**: AI signals are algorithmic suggestions, NOT professional advice.
-> - **USE AT YOUR OWN RISK**: The creators are NOT responsible for any financial losses.
-> - **PAPER TRADING RECOMMENDED**: Always test with demo mode before any live trading.
-> - **NEVER TRADE WITH MONEY YOU CANNOT AFFORD TO LOSE**.
->
-> 📖 **Read the full [DISCLAIMER.md](./DISCLAIMER.md) before using this software.**
+### AI-Powered Trading Signals
 
----
-
-## 🚀 Features
-
-### 🤖 AI-Powered Trading Signals
 | Feature | Description |
 |---------|-------------|
 | **Signal Generation** | AI-generated buy/sell signals with confidence scores |
 | **Technical Analysis** | RSI, MACD, SMA, EMA, Bollinger Bands, VWAP, ADX, Volume Profile, Ichimoku Cloud, Stochastic Oscillator (%K/%D) |
-| **Pattern Recognition** | Doji, Hammer, Engulfing, Morning Star, Evening Star, Inverted Hammer |
-| **Support/Resistance** | Automated level detection |
 | **Multi-Indicator Confirmation** | 10+ indicators cross-validated for signal quality |
+| **Multi-Timeframe Analysis** | 6 timeframes: 1m, 5m, 15m, 1h, 4h, 1d |
+| **Confidence Scoring** | Weighted composite score with per-indicator breakdown |
 
-### 🛡️ Risk Management
+### Professional Trade Order Panel
+
 | Feature | Description |
 |---------|-------------|
-| **Position Sizing** | Kelly Criterion-influenced fixed-fractional sizing |
-| **Drawdown Protection** | Auto-halt trading at configurable drawdown threshold |
-| **Daily Loss Limit** | Stop trading when daily loss exceeds threshold |
+| **Direction Toggle** | BUY / SELL selector |
+| **Order Types** | Market and Limit orders |
+| **Entry Price** | Editable for limit orders |
+| **Stop Loss / Take Profit** | Manual entry with TP1/TP2/TP3 from signal |
+| **Leverage Slider** | 1x-100x with signal pre-fill |
+| **Risk Management** | % slider (0.1-10%) with quick presets (0.5/1/2/3/5%) |
+| **Auto Quantity** | Calculated from risk % and stop loss distance |
+| **Order Summary** | Position size, margin required, SL distance %, R:R ratio |
+
+### Risk Management
+
+| Feature | Description |
+|---------|-------------|
+| **Position Sizing** | Kelly Criterion, Fixed Fractional, Fixed Ratio |
+| **Drawdown Protection** | Auto-halt at configurable drawdown threshold |
 | **Portfolio Risk Scoring** | 0-1 scale combining position risk + concentration |
+| **Circuit Breaker** | Auto-halt after consecutive losses with HALF_OPEN recovery |
 | **Margin Call Detection** | Automatic liquidation of worst positions first |
-| **Emergency Halt** | One-click trading halt with configurable thresholds |
-| **Circuit Breaker** | Auto-halt after consecutive losses with gradual recovery (NEW v3.1.0) |
+| **Emergency Halt** | One-click trading halt |
 
-### 📰 Fundamental News Analysis
-- **Multi-Source Aggregation**: CryptoPanic, CoinGecko, CryptoCompare
-- **Sentiment Scoring**: Bullish/Bearish classification (-1 to 1)
-- **Real-time Updates**: Live news feed integration
-- **Impact Assessment**: News importance scoring
+### Market Volume & Sentiment Monitor
 
-### 📊 Backtesting Engine
-- **Historical Simulation**: Test strategies on past data
-- **Performance Metrics**: Sharpe Ratio, Win Rate, Max Drawdown
-- **Strategy Optimization**: Parameter grid search
-- **Detailed Reports**: Trade-by-trade analysis
+| Feature | Description |
+|---------|-------------|
+| **Multi-Exchange Volume** | 24h volume from Bybit, Binance, OKX, Gate.io, Bitget (public endpoints, no API keys needed) |
+| **10 Instruments** | BTC, ETH, SOL, BNB, XRP, DOGE, ADA, AVAX, DOT, LINK |
+| **Sentiment Engine** | Bullish/Bearish/Neutral classification per instrument |
+| **Volume Bars** | Proportional visualization with green/red direction |
+| **Exchange Dominance** | % share per exchange for each instrument |
+| **Market Summary** | Overall sentiment, bullish/bearish/neutral counts, total volume |
+| **Auto-Refresh** | Every 60 seconds with manual refresh button |
 
-### 💰 Paper Trading (Demo Mode)
-- **Risk-Free Testing**: Practice without real money
-- **Real Market Prices**: Live price simulation
-- **Portfolio Tracking**: P&L monitoring
-- **Position Management**: Stop-loss/Take-profit
+### Exchange Platform Management
 
-### 🔄 Demo/Live Trading with Exchange Platforms (NEW v3.2.0)
-- **Multi-Exchange Support**: Add Bybit accounts with API keys
-- **Demo/Live Mode Toggle**: One-click switch between paper and live trading
-- **Live Order Execution**: Place market/limit orders on real exchanges
-- **Live Position Tracking**: Real-time sync of exchange positions
-- **Connection Testing**: Verify API keys before going live
-- **Testnet Support**: Safe testing with exchange testnets
-- **MT5-Style Trade Terminal**: Professional open trades table with P&L, close %, totals
+- **12 Platform Presets**: Bybit, Binance, OKX, Bitget, KuCoin, Gate.io, HTX, Deribit, BingX, MEXC, BitMart, Crypto.com
+- **API Key Management**: Add/remove/test exchange accounts
+- **Connection Testing**: Verify API key permissions before trading
+- **Testnet/Mainnet Toggle**: Per-account safety controls
+- **API Key Masking**: Keys hidden in API responses
 
-### 📓 Trade Journal (NEW v3.1.0)
-- **Trade Recording**: Log entries with entry/exit, PnL, and emotional state
-- **Review Reports**: Comprehensive trade review with win/loss analysis
-- **Win Rate by Strategy**: Performance breakdown per strategy type
+### Demo/Live Trading Modes
 
-### ⚖️ Portfolio Rebalancer (NEW v3.1.0)
-- **Target Allocations**: Define and manage target portfolio weights
-- **Drift Detection**: Automatic detection when allocations deviate from targets
-- **Risk-Adjusted Allocation**: Position sizing adjusted by risk profile
+- **One-click Toggle**: Switch between demo and live mode from the header
+- **$10,000 Demo Account**: Virtual starting balance with simulated slippage
+- **Live Order Execution**: Real market/limit orders on connected exchanges
+- **Live Position Sync**: Real-time balance and position data from exchange
+- **MT5-Style Trade Terminal**: Professional open trades table with P&L, close 50%, totals
+- **Persistence**: Demo state (portfolio, positions, trades) saved to PostgreSQL — survives page refresh and server restarts
+- **Auto-Sync**: Frontend syncs with server every 30 seconds in demo mode
 
-### 🏥 Health Check API (NEW v3.1.0)
-- **System Status Monitoring**: Real-time health check endpoint for service status
+### Backtesting Engine
 
-### 🔗 Exchange Integration
-- **Bybit API**: Full spot and futures support
-- **Testnet Mode**: Safe testing environment
-- **Order Types**: Market, Limit, Stop orders
-- **Position Management**: Leverage, margin, risk controls
+- **7 Strategies**: RSI Reversal, MACD Crossover, Bollinger Breakout, Stochastic Swing, Ichimoku Trend, VWAP Mean Reversion, Multi-Indicator Composite
+- **Performance Metrics**: Sharpe Ratio, Win Rate, Max Drawdown, Profit Factor
+- **Commission & Slippage Modeling**: Realistic simulation
 
----
+### Active Scanning
 
-## 🎬 Demo
+- **5 Strategies**: Balanced, Momentum, Breakout, Mean Reversion, VWAP/TWAP
+- **News-Based Signals**: Breaking news integrated with scan results
+- **Configurable Pairs, Strategies, Scan Interval**
 
-<details>
-<summary>📷 View Screenshots</summary>
+### News & Sentiment Analysis
 
-### Dashboard Overview
-![Dashboard](./public/dashboard-screenshot.png)
+- **Multi-Source**: CryptoPanic, CoinGecko, CryptoCompare
+- **Sentiment Scoring**: Bullish/Bearish classification (-1 to +1)
+- **Impact Assessment**: High/Medium/Low importance
 
-### Signal Generation
-![Signals](./public/signals-screenshot.png)
+### Trade Journal
 
-### Paper Trading
-![Demo Trading](./public/demo-trading-screenshot.png)
+- **Trade Recording**: Log entries with entry/exit, PnL, emotional state
+- **Review Reports**: Win/loss analysis per strategy
+- **Search & Filter**: By date range, symbol, tags
 
-</details>
+### Portfolio Rebalancer
+
+- **4 Strategies**: Equal Weight, Market Cap, Risk Parity, Custom
+- **3 Triggers**: Time-based, Drift-based, Signal-based
 
 ---
 
-## ⚡ Quick Start
+## Quick Start
 
 ```bash
 # Clone the repository
@@ -177,8 +169,12 @@ cd mantle-ai-trader
 # Install dependencies
 bun install
 
-# Setup database
-bun run db:push
+# Setup environment
+cp .env.example .env
+# Edit .env with your configuration
+
+# Setup database (PostgreSQL)
+bunx prisma migrate dev
 
 # Start the application
 bun run dev
@@ -188,84 +184,71 @@ Open [http://localhost:3000](http://localhost:3000) to access the dashboard.
 
 ---
 
-## 🛠 Installation
+## Installation
 
 ### Prerequisites
 
 | Requirement | Version | Notes |
 |------------|---------|-------|
-| Node.js | 18+ | or Bun runtime |
-| SQLite | Included | Default database |
-| Bybit API | Optional | For live trading |
+| Bun | 1.2+ | Recommended runtime |
+| PostgreSQL | 15+ | Database |
+| Exchange API | Optional | For live trading |
 
-### Step-by-Step Setup
+### Setup
 
 ```bash
 # 1. Clone repository
 git clone https://github.com/roman-ryzenadvanced/mantle-ai-trader.git
-
-# 2. Navigate to project
 cd mantle-ai-trader
 
-# 3. Install dependencies
+# 2. Install dependencies
 bun install
 
-# 4. Configure environment
+# 3. Configure environment
 cp .env.example .env
-# Edit .env with your API keys (optional)
+# Edit .env with your database URL and optional API keys
 
-# 5. Initialize database
-bun run db:push
+# 4. Initialize database
+bunx prisma migrate dev
 
-# 6. Start development server
+# 5. Start development server
 bun run dev
 
-# 7. (Optional) Start WebSocket service
+# 6. (Optional) Start WebSocket price service
 bun run trading-service
 ```
 
-### Docker Installation (Coming Soon)
-
-```bash
-docker-compose up -d
-```
-
 ---
 
-## 📈 Usage
+## Usage
 
-### Web Dashboard
+### Dashboard Tabs
 
 | Tab | Function |
 |-----|----------|
-| **Signals** | Generate and view AI trading signals |
-| **Positions** | Manage open positions and portfolio |
-| **Backtest** | Run strategy simulations |
-| **News** | View market news with sentiment |
+| **Signals** | Generate and view AI trading signals, active multi-strategy scanning |
+| **Positions** | MT5-style trade terminal with open positions, P&L tracking, close actions |
+| **Backtest** | Run strategy simulations with equity curves and performance metrics |
+| **News** | Market news with sentiment analysis and impact scoring |
 
-### Supported Trading Pairs
+### Dashboard Panels (always visible)
 
-- BTCUSDT, ETHUSDT, SOLUSDT, BNBUSDT, XRPUSDT
-- And 100+ more via Bybit API
+| Panel | Description |
+|-------|-------------|
+| **Portfolio Stats** | Portfolio value, realized P&L, unrealized P&L, market sentiment |
+| **Risk Metrics** | Risk score, drawdown, signal quality, exposure |
+| **Live Prices** | Real-time prices for BTC, ETH, SOL, BNB, XRP |
+| **Market Volume Monitor** | Multi-exchange volume, sentiment per instrument, exchange dominance |
+| **Trade Order Panel** | Full order configuration with risk management (below signals) |
 
-### Signal Example
+### Supported Instruments
 
-```json
-{
-  "symbol": "BTCUSDT",
-  "action": "BUY",
-  "confidence": 0.85,
-  "reasoning": "Bullish trend with strong support at $44,000. RSI oversold recovery.",
-  "stopLoss": 43500,
-  "takeProfit": 46500,
-  "technicalScore": 0.78,
-  "sentimentScore": 0.65
-}
-```
+- BTCUSDT, ETHUSDT, SOLUSDT, BNBUSDT, XRPUSDT, DOGEUSDT, ADAUSDT, AVAXUSDT, DOTUSDT, LINKUSDT
+- And 100+ more via exchange API
 
 ---
 
-## 🔌 API Reference
+## API Reference
 
 ### Base URL
 ```
@@ -274,65 +257,42 @@ http://localhost:3000/api/trading
 
 ### Endpoints
 
-#### Generate Signal
-```http
-POST /signals
-Content-Type: application/json
-
-{
-  "symbol": "BTCUSDT",
-  "timeframe": "1h"
-}
-```
-
-#### Get Portfolio
-```http
-GET /demo?action=portfolio
-```
-
-#### Place Demo Order
-```http
-POST /demo
-Content-Type: application/json
-
-{
-  "action": "place_order",
-  "symbol": "BTCUSDT",
-  "side": "BUY",
-  "quantity": 0.01,
-  "type": "MARKET"
-}
-```
-
-#### Run Backtest
-```http
-POST /backtest
-Content-Type: application/json
-
-{
-  "symbol": "BTCUSDT",
-  "startDate": "2024-01-01",
-  "endDate": "2024-06-01",
-  "initialCapital": 10000
-}
-```
-
-#### Get News
-```http
-GET /news?symbol=BTC&limit=20
-```
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/demo?action=portfolio` | Get demo portfolio |
+| GET | `/demo?action=positions` | Get demo positions |
+| GET | `/demo?action=statistics` | Get demo statistics |
+| GET | `/demo?action=sync` | Sync persisted demo state |
+| POST | `/demo` | Place demo order, close position, etc. |
+| GET | `/live?action=balance` | Get live exchange balance |
+| GET | `/live?action=positions` | Get live exchange positions |
+| GET | `/live?action=tickers` | Get live market prices |
+| POST | `/live` | Place live order or close position |
+| GET | `/market?action=volume` | Multi-exchange volume & sentiment |
+| GET | `/signals` | List signals (filter by symbol, status) |
+| POST | `/signals` | Generate signal for symbol/timeframe |
+| POST | `/signals/scan` | Multi-strategy active scan |
+| POST | `/signals/news-signals` | News-based signal generation |
+| GET | `/news` | Paginated news with breaking/sentiment modes |
+| GET | `/backtest` | List backtest sessions |
+| POST | `/backtest` | Run backtest |
+| GET | `/settings` | List exchange accounts |
+| POST | `/settings` | Save, test, delete, activate accounts |
+| GET | `/health` | System health check |
 
 ---
 
-## 🔧 Configuration
+## Configuration
 
 ### Environment Variables
 
 ```env
-# Bybit Exchange (Optional)
+# Database (PostgreSQL)
+DATABASE_URL="postgresql://user:password@localhost:5432/mantle_trader"
+
+# Bybit Exchange (Optional - for live trading)
 BYBIT_API_KEY=your_api_key
-BYBIT_API_SECRET=your_api_secret
-BYBIT_TESTNET=true
+BYBIT_API_SECRET=your_secret
 
 # News APIs (Optional)
 CRYPTOPANIC_API_KEY=your_key
@@ -340,9 +300,6 @@ CRYPTOCOMPARE_API_KEY=your_key
 
 # Vector Database (Optional)
 CHROMADB_URL=http://localhost:8000
-
-# Database
-DATABASE_URL="file:./prisma/data/mantle-trader.db"
 ```
 
 ### Risk Management Settings
@@ -352,43 +309,45 @@ DATABASE_URL="file:./prisma/data/mantle-trader.db"
 | Risk Level | MODERATE | CONSERVATIVE, MODERATE, AGGRESSIVE |
 | Max Position | $1,000 | Maximum position size |
 | Max Leverage | 5x | Maximum leverage multiplier |
-| Auto Trading | Disabled | Automatic signal execution |
+| Circuit Breaker | 5 losses | Consecutive losses before halt |
 
 ---
 
-## 📊 Architecture
+## Architecture
 
 ```
 mantle-ai-trader/
-├── 📁 src/
-│   ├── 📁 app/
-│   │   ├── 📁 api/trading/     # REST API endpoints
-│   │   ├── 📄 layout.tsx       # Root layout with SEO
-│   │   └── 📄 page.tsx         # Main dashboard
-│   ├── 📁 lib/
-│   │   ├── 📁 trading/
-│   │   │   ├── 📁 core/        # Types & Bybit client
-│   │   │   ├── 📁 signals/     # AI signal engine + 12+ indicators
-│   │   │   ├── 📁 news/        # News aggregator
-│   │   │   ├── 📁 backtest/    # Backtesting
-│   │   │   ├── 📁 demo/        # Paper trading + trailing stops
-│   │   │   ├── 📁 risk/        # Risk management system
-│   │   │   ├── 📁 analytics/   # Performance tracking
-│   │   │   ├── 📁 journal/     # Trade journal system
-│   │   │   └── 📁 portfolio/   # Portfolio rebalancer
-│   │   ├── 📁 api/             # API validation utilities
-│   │   └── 📁 vector/          # VectorDB
-│   └── 📁 components/ui/       # UI components
-├── 📁 tests/                   # 620+ tests across 22 files
-│   ├── 📁 unit/                # 16 unit test files
-│   ├── 📁 integration/         # 3 integration test files
-│   ├── 📁 e2e/                 # 2 E2E test files
-│   └── 📁 stress/              # 1 stress test file
-├── 📁 mini-services/
-│   └── 📁 trading-service/     # WebSocket service
-├── 📁 prisma/
-│   └── 📄 schema.prisma        # Database schema
-└── 📁 public/                  # Static assets
+├── src/
+│   ├── app/
+│   │   ├── api/trading/        # REST API endpoints
+│   │   │   ├── demo/route.ts    # Demo trading (positions, orders, sync)
+│   │   │   ├── live/route.ts    # Live exchange trading
+│   │   │   ├── market/route.ts # Multi-exchange volume monitoring
+│   │   │   ├── signals/        # Signal generation + scanning
+│   │   │   ├── news/route.ts   # News aggregation + sentiment
+│   │   │   ├── backtest/       # Backtesting engine
+│   │   │   └── settings/       # Exchange account management
+│   │   ├── layout.tsx          # Root layout with SEO
+│   │   └── page.tsx            # Main dashboard (single-page)
+│   ├── lib/
+│   │   ├── trading/
+│   │   │   ├── core/            # Bybit client, types
+│   │   │   ├── signals/         # AI signal engine, 10+ indicators
+│   │   │   ├── news/            # News aggregator, sentiment
+│   │   │   ├── backtest/        # Backtesting engine, 7 strategies
+│   │   │   ├── demo/            # Paper trading, circuit breaker, persistence
+│   │   │   ├── risk/            # Risk management
+│   │   │   ├── analytics/       # Performance tracking
+│   │   │   ├── journal/         # Trade journal
+│   │   │   └── portfolio/       # Portfolio rebalancer
+│   │   └── api/                 # API validation utilities
+│   └── components/ui/           # shadcn/ui components
+├── tests/                       # 620+ tests across 22 files
+├── mini-services/trading-service/ # WebSocket price service
+├── prisma/
+│   ├── schema.prisma            # Database schema (PostgreSQL)
+│   └── data/                    # Database files
+└── public/                      # Static assets
 ```
 
 ### Tech Stack
@@ -396,17 +355,18 @@ mantle-ai-trader/
 | Category | Technology |
 |----------|------------|
 | **Framework** | Next.js 16, TypeScript 5 |
+| **Runtime** | Bun 1.2 |
 | **Styling** | Tailwind CSS 4, shadcn/ui |
-| **Database** | Prisma ORM, SQLite |
+| **Database** | PostgreSQL, Prisma ORM |
 | **AI/ML** | z-ai-web-dev-sdk |
-| **Exchange** | Bybit API v5 |
+| **Exchange** | Bybit API v5 (live), 5 exchanges (volume monitoring) |
 | **Real-time** | Socket.io |
 | **Charts** | Recharts |
-| **State** | Zustand, TanStack Query |
+| **Validation** | Zod |
 
 ---
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Run all tests
@@ -417,183 +377,89 @@ bun test tests/unit/
 
 # Run integration tests
 bun test tests/integration/
-
-# Run E2E tests
-bun test tests/e2e/
 ```
 
-### Test Coverage (v3.1.0)
+### Test Coverage
 
 | Module | Tests | Status |
 |--------|-------|--------|
-| Core Types | 8 | ✅ All pass |
-| Signal Engine | 18 | ✅ All pass |
-| Technical Indicators | 61 | ✅ All pass |
-| Ichimoku Cloud | 16 | ✅ All pass |
-| Stochastic Oscillator | 21 | ✅ All pass |
-| Demo Trader | 35 | ✅ All pass |
-| News Aggregator | 14 | ✅ All pass |
-| Vector Store | 5 | ✅ All pass |
-| Backtest Engine | 6 | ✅ All pass |
-| Risk Manager | 52 | ✅ All pass |
-| Circuit Breaker | 30 | ✅ All pass |
-| Performance Tracker | 47 | ✅ All pass |
-| Bybit Client | 53 | ✅ All pass |
-| API Validation | 71 | ✅ All pass |
-| API Integration | 8 | ✅ All pass |
-| Signal Pipeline | 26 | ✅ All pass |
-| Risk Integration | 20 | ✅ All pass |
-| Trade Journal | 30 | ✅ All pass |
-| Portfolio Rebalancer | 28 | ✅ All pass |
-| E2E Workflows | 10 | ✅ All pass |
-| Stress Tests | 15 | ✅ All pass |
-| **Total** | **620+** | **✅ All pass** |
+| Core Types | 8 | All pass |
+| Signal Engine | 18 | All pass |
+| Technical Indicators | 61 | All pass |
+| Ichimoku Cloud | 16 | All pass |
+| Stochastic Oscillator | 21 | All pass |
+| Demo Trader | 35 | All pass |
+| News Aggregator | 14 | All pass |
+| Vector Store | 5 | All pass |
+| Backtest Engine | 6 | All pass |
+| Risk Manager | 52 | All pass |
+| Circuit Breaker | 30 | All pass |
+| Performance Tracker | 47 | All pass |
+| Bybit Client | 53 | All pass |
+| API Validation | 71 | All pass |
+| API Integration | 8 | All pass |
+| Signal Pipeline | 26 | All pass |
+| Risk Integration | 20 | All pass |
+| Trade Journal | 30 | All pass |
+| Portfolio Rebalancer | 28 | All pass |
+| E2E Workflows | 10 | All pass |
+| Stress Tests | 15 | All pass |
+| **Total** | **620+** | **All pass** |
 
 ---
 
-## 📋 Version History
+## Version History
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| **v3.2.0** | 2026-06-06 | Exchange Platform Management, Demo/Live Mode Toggle, Professional Trade Order Panel, MT5 Trade Terminal, News Sentiment Indicators, Live Scan Feed, Active Scanning with 5 Strategies |
-| **v3.1.0** | 2026-06-06 | Circuit Breaker, Ichimoku Cloud, Stochastic Oscillator, Trade Journal, Portfolio Rebalancer, Health Check API, 620+ tests |
-| **v3.0.0** | 2026-06-06 | Risk Management, Performance Analytics, Bollinger Bands, VWAP, ADX, Volume Profile, 447 tests |
-| **v2.0.0** | 2026-06-06 | 8 critical bug fixes, sentiment/MACD/RSI fixes, comprehensive test suite |
-| **v1.0.0** | 2025-06-06 | Initial release with core trading engine |
-
-## 🤝 Contributing
-
-Contributions are welcome! Please follow these steps:
-
-1. 🍴 Fork the repository
-2. 🌿 Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. 💾 Commit your changes (`git commit -m 'Add amazing feature'`)
-4. 📤 Push to the branch (`git push origin feature/amazing-feature`)
-5. 🔃 Open a Pull Request
-
-### Code of Conduct
-- Be respectful and inclusive
-- Write clean, documented code
-- Add tests for new features
-- Update documentation
+| **v3.4.0** | 2026-06-06 | Multi-exchange market volume & sentiment monitor (Bybit, Binance, OKX, Gate.io, Bitget), per-instrument volume bars, sentiment engine, exchange dominance % |
+| **v3.3.1** | 2026-06-06 | 12 platform presets in settings (Bybit, Binance, OKX, Bitget, KuCoin, Gate.io, HTX, Deribit, BingX, MEXC, BitMart, Crypto.com) |
+| **v3.3.0** | 2026-06-06 | Persistence memory — demo state saved to PostgreSQL, auto-restore on startup, auto-sync every 30s |
+| **v3.2.0** | 2026-06-06 | Exchange platform management, demo/live toggle, professional trade order panel, MT5 trade terminal, news sentiment indicators, active scanning (5 strategies) |
+| **v3.1.0** | 2026-06-06 | Circuit breaker, Ichimoku Cloud, Stochastic Oscillator, trade journal, portfolio rebalancer, health check API |
+| **v3.0.0** | 2026-06-06 | Risk management, performance analytics, Bollinger Bands, VWAP, ADX, Volume Profile |
+| **v2.0.0** | 2026-06-06 | 8 critical bug fixes, comprehensive test suite |
+| **v1.0.0** | 2025-06-06 | Initial release |
 
 ---
 
-## 📜 License
+## Contributing
 
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
-
-```
-MIT License - Free to use, modify, and distribute
-```
-
----
-
-## 🏆 Mantle Turing Test Hackathon
-
-This project is built for the **Mantle Turing Test Hackathon**:
-
-| Info | Details |
-|------|---------|
-| **Prize Pool** | $120,000 cash + $103,000 API credits |
-| **Tracks** | AI Trading, AI Alpha & Data |
-| **Registration** | [mantle.to/Hackathon](https://mantle.to/Hackathon) |
-| **Chat** | [Telegram](https://t.me/MantleTuringTestHackathon) |
-
-### Competition Tracks
-- ✅ **AI Trading** - Trading bots, strategy automation, Bybit API
-- ✅ **AI Alpha & Data** - Onchain analytics, anomaly detection
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ---
 
-## 🏆 Hackathon Submission
+## License
 
-### Project Overview
-**Mantle AI Trader** is an AI-powered cryptocurrency trading bot built for the Mantle Turing Test Hackathon. It combines 12+ technical indicators, news sentiment analysis, and intelligent risk management into a comprehensive trading platform with 620+ passing tests.
-
-### Key Differentiators
-- **🛡️ Circuit Breaker Pattern**: Auto-halts trading after consecutive losses with gradual HALF_OPEN recovery — a production-grade safety net rarely seen in hackathon projects
-- **📓 Trade Journal**: Full trade recording, review reports, and win-rate-by-strategy analytics for continuous strategy improvement
-- **⚖️ Portfolio Rebalancer**: Target allocation management with drift detection and risk-adjusted position sizing
-- **🔬 Battle-Tested**: 620+ tests across 22 files with 9 critical bug fixes documented — we found and fixed bugs that would have caused real financial losses
-- **📊 12+ Technical Indicators**: RSI, MACD, Bollinger Bands, VWAP, ADX, Volume Profile, Ichimoku Cloud, Stochastic Oscillator, and more
-- **📰 Multi-Source News Sentiment**: Aggregated from CryptoPanic, CoinGecko, and CryptoCompare with real-time scoring
-- **🔄 Demo/Live Trading**: One-click mode switch with exchange API key management, live order execution, and MT5-style trade terminal
-- **🎯 Professional Order Panel**: Risk % sizing, leverage control, TP level selector, order summary with R:R ratio
-- **📡 Active Scanning**: 5 strategies (Balanced, Momentum, Breakout, Mean Reversion, VWAP/TWAP) with news-based signals and live feed
-
-### Technical Highlights
-- **TypeScript 5** with strict mode (`noImplicitAny: true`)
-- **Next.js 16** full-stack application with REST API + WebSocket
-- **Prisma ORM** with SQLite for persistent storage
-- **z-ai-web-dev-sdk** for AI-powered signal reasoning
-- **Bybit API v5** integration for real exchange connectivity
-- **Comprehensive error handling**: Input validation, re-entrancy guards, negative balance protection
-- **Security hardening**: API error responses sanitized (no internal details exposed), XSS/SQL injection validation
-
-### Demo Instructions
-```bash
-# 1. Clone and install
-git clone https://github.com/roman-ryzenadvanced/mantle-ai-trader.git
-cd mantle-ai-trader
-bun install
-
-# 2. Setup database
-bun run db:push
-
-# 3. Start the app
-bun run dev
-
-# 4. Open dashboard
-# http://localhost:3000
-
-# 5. Run the test suite (620+ tests)
-bun test
-
-# 6. Health check
-curl http://localhost:3000/api/health
-```
+MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 🌟 Star History
-
-<a href="https://www.star-history.com/#roman-ryzenadvanced/mantle-ai-trader&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=roman-ryzenadvanced/mantle-ai-trader&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=roman-ryzenadvanced/mantle-ai-trader&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=roman-ryzenadvanced/mantle-ai-trader&type=Date" />
- </picture>
-</a>
-
----
-
-## 📞 Support & Community
+## Support & Community
 
 | Platform | Link |
 |----------|------|
 | **GitHub Issues** | [Report a Bug](https://github.com/roman-ryzenadvanced/mantle-ai-trader/issues) |
 | **Discussions** | [GitHub Discussions](https://github.com/roman-ryzenadvanced/mantle-ai-trader/discussions) |
-| **Telegram** | [Mantle Hackathon Chat](https://t.me/MantleTuringTestHackathon) |
-| **Twitter** | [@rommarkdev](https://twitter.com/rommarkdev) |
 
 ---
 
 <div align="center">
-  
-  <!-- Made by Rommark.Dev Banner -->
+
   <a href="https://rommark.dev" target="_blank">
-    <img src="https://img.shields.io/badge/____________Made%20with%20❤️%20by%20Rommark.Dev____________-ff6b6b?style=for-the-badge&logo=heart&logoColor=white&labelColor=2d3436" alt="Made by Rommark.Dev" />
+    <img src="https://img.shields.io/badge/Made%20with%20❤️%20by%20Rommark.Dev-ff6b6b?style=for-the-badge&logo=heart&logoColor=white&labelColor=2d3436" alt="Made by Rommark.Dev" />
   </a>
-  
+
   <br /><br />
-  
+
   <p>
-    <a href="https://github.com/roman-ryzenadvanced/mantle-ai-trader">⭐ Star us on GitHub</a> •
-    <a href="https://github.com/roman-ryzenadvanced/mantle-ai-trader/issues">🐛 Report Bug</a> •
-    <a href="https://github.com/roman-ryzenadvanced/mantle-ai-trader/pulls">💡 Request Feature</a>
+    <a href="https://github.com/roman-ryzenadvanced/mantle-ai-trader">Star us on GitHub</a> &bull;
+    <a href="https://github.com/roman-ryzenadvanced/mantle-ai-trader/issues">Report Bug</a> &bull;
+    <a href="https://github.com/roman-ryzenadvanced/mantle-ai-trader/pulls">Request Feature</a>
   </p>
-  
-  <p><strong>Keywords:</strong> AI trading bot, cryptocurrency trading, crypto signals, Bybit API, trading automation, sentiment analysis, backtesting, paper trading, Mantle hackathon, open source trading bot, TypeScript, Next.js, algorithmic trading, DeFi, Web3</p>
-  
+
 </div>

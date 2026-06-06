@@ -1,7 +1,7 @@
 {
   "name": "mantle-ai-trader",
-  "version": "3.0.0",
-  "description": "AI-powered trading bot for Mantle Turing Test Hackathon - Fundamental news-based trading with signals, backtesting, and demo mode",
+  "version": "3.4.0",
+  "description": "AI-powered cryptocurrency trading platform with multi-exchange monitoring, professional order management, backtesting, and demo/live trading modes",
   "main": "src/app/page.tsx",
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
