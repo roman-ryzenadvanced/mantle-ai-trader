@@ -235,11 +235,13 @@ export class NewsAggregator {
           { timeout: 10000 }
         );
 
-        if (!response.data?.Data) {
+        // Fixed: CryptoCompare API may return Data as non-array or change format
+        const rawData = response.data?.Data;
+        if (!rawData || !Array.isArray(rawData)) {
           return [];
         }
 
-        return response.data.Data.map((article: Record<string, unknown>): NewsArticle => ({
+        return rawData.map((article: Record<string, unknown>): NewsArticle => ({
           id: `cc-${article.id}`,
           title: article.title as string,
           content: article.body as string,
@@ -266,11 +268,13 @@ export class NewsAggregator {
         { timeout: 10000 }
       );
 
-      if (!response.data?.Data) {
+      // Fixed: Validate Data is actually an array before mapping
+      const rawData = response.data?.Data;
+      if (!rawData || !Array.isArray(rawData)) {
         return [];
       }
 
-      let articles = response.data.Data.map((article: Record<string, unknown>): NewsArticle => ({
+      let articles = rawData.map((article: Record<string, unknown>): NewsArticle => ({
         id: `cc-${article.id}`,
         title: article.title as string,
         content: article.body as string,

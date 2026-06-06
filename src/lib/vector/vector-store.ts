@@ -425,11 +425,12 @@ export class VectorStore {
 
     const avgSentiment = similar.length > 0 ? totalSentiment / similar.length : 0;
 
+    // Fixed: Check extreme values FIRST (was reversed, causing VERY_BULLISH to never trigger)
     let label = SentimentLabel.NEUTRAL;
-    if (avgSentiment >= 0.3) label = SentimentLabel.BULLISH;
-    else if (avgSentiment >= 0.6) label = SentimentLabel.VERY_BULLISH;
-    else if (avgSentiment <= -0.3) label = SentimentLabel.BEARISH;
+    if (avgSentiment >= 0.6) label = SentimentLabel.VERY_BULLISH;
+    else if (avgSentiment >= 0.2) label = SentimentLabel.BULLISH;
     else if (avgSentiment <= -0.6) label = SentimentLabel.VERY_BEARISH;
+    else if (avgSentiment <= -0.2) label = SentimentLabel.BEARISH;
 
     return {
       sentiment: avgSentiment,

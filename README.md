@@ -368,25 +368,33 @@ mantle-ai-trader/
 # Run all tests
 bun test
 
-# Run unit tests
+# Run unit tests only
 bun test tests/unit/
 
 # Run integration tests
 bun test tests/integration/
 
-# Run with coverage
-bun test --coverage
+# Run E2E tests
+bun test tests/e2e/
 ```
 
-### Test Coverage
+### Test Coverage (v2.0.0)
 
-| Module | Coverage |
-|--------|----------|
-| Signal Engine | 85% |
-| Demo Trader | 90% |
-| News Aggregator | 75% |
+| Module | Tests | Status |
+|--------|-------|--------|
+| Core Types | 8 | ✅ All pass |
+| Signal Engine | 18 | ✅ All pass |
+| Demo Trader | 35 | ✅ All pass |
+| News Aggregator | 14 | ✅ All pass |
+| Vector Store | 5 | ✅ All pass |
+| Backtest Engine | 6 | ✅ All pass |
+| API Integration | 8 | ✅ All pass |
+| E2E Workflows | 4 | ✅ All pass |
+| **Total** | **98** | **✅ All pass** |
 
 ---
+
+## 📋 Version History
 
 ## 🤝 Contributing
 

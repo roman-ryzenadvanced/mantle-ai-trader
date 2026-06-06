@@ -1,6 +1,9 @@
 /**
  * Backtesting Engine for Mantle AI Trading Bot
  * Simulates trading strategies on historical data
+ * 
+ * v2.0.0 - Fixed: State leakage between runs, performance metrics calculation,
+ * added trade cooldown, proper Sharpe/Sortino calculation
  */
 
 import {
@@ -17,12 +20,9 @@ import {
 import { signalEngine } from '../signals/signal-engine';
 
 export class BacktestEngine {
-  private trades: BacktestResult[] = [];
-  private equityCurve: number[] = [];
-  private currentCapital: number = 0;
-
   /**
    * Run a backtest session
+   * Fixed: No longer uses mutable instance state - all state is local to prevent leakage
    */
   async runBacktest(config: BacktestConfig): Promise<BacktestSession> {
     const session: BacktestSession = {
@@ -37,9 +37,11 @@ export class BacktestEngine {
       results: []
     };
 
-    this.trades = [];
-    this.equityCurve = [];
-    this.currentCapital = config.initialCapital;
+    // Local state - prevents leakage between concurrent runs
+    let trades: BacktestResult[] = [];
+    let equityCurve: number[] = [];
+    let currentCapital = config.initialCapital;
+    let lastTradeIndex = -10; // Prevent overtrading - minimum 10 candles between trades
 
     try {
       // Generate simulated historical data (in production, fetch from API)
@@ -49,47 +51,58 @@ export class BacktestEngine {
         config.endDate
       );
 
-      // Process each data point
+      // Process each data point with a sliding window
       for (let i = 50; i < historicalData.length; i++) {
-        const windowData = historicalData.slice(0, i);
+        const windowData = historicalData.slice(Math.max(0, i - 200), i);
         const currentPrice = historicalData[i].close;
 
-        // Generate signal
-        const signalOutput = await signalEngine.generateSignal({
-          symbol: config.symbol,
-          timeframe: TimeFrame.ONE_HOUR,
-          marketData: windowData,
-          newsArticles: []
-        });
+        // Only consider trading if we haven't traded too recently (cooldown)
+        if (i - lastTradeIndex >= 10) {
+          // Generate signal
+          const signalOutput = await signalEngine.generateSignal({
+            symbol: config.symbol,
+            timeframe: TimeFrame.ONE_HOUR,
+            marketData: windowData,
+            newsArticles: []
+          });
 
-        // Check if we should trade
-        if (signalOutput.signal.action !== TradeAction.HOLD) {
-          await this.processSignal(
-            signalOutput.signal,
-            currentPrice,
-            config,
-            historicalData.slice(i)
-          );
+          // Check if we should trade - require high confidence
+          if (signalOutput.signal.action !== TradeAction.HOLD && signalOutput.signal.confidence > 0.3) {
+            const tradeResult = this.processSignal(
+              signalOutput.signal,
+              currentPrice,
+              config,
+              historicalData.slice(i)
+            );
+
+            if (tradeResult) {
+              trades.push(tradeResult);
+              currentCapital += (tradeResult.pnl || 0);
+              lastTradeIndex = i;
+            }
+          }
         }
 
         // Update equity curve
-        this.equityCurve.push(this.currentCapital);
+        equityCurve.push(currentCapital);
       }
 
       // Calculate final metrics
       const metrics = this.calculatePerformanceMetrics(
         config.initialCapital,
-        this.currentCapital
+        currentCapital,
+        trades,
+        equityCurve
       );
 
       // Update session with results
       session.status = 'COMPLETED';
-      session.finalCapital = this.currentCapital;
-      session.totalTrades = this.trades.length;
+      session.finalCapital = currentCapital;
+      session.totalTrades = trades.length;
       session.winRate = metrics.winRate;
       session.maxDrawdown = metrics.maxDrawdown;
       session.sharpeRatio = metrics.sharpeRatio;
-      session.results = this.trades;
+      session.results = trades;
 
       return session;
     } catch (error) {
@@ -101,16 +114,19 @@ export class BacktestEngine {
 
   /**
    * Process a trading signal in backtest
+   * Fixed: Now returns a result instead of mutating shared state
    */
-  private async processSignal(
+  private processSignal(
     signal: Omit<Signal, 'id' | 'createdAt' | 'updatedAt'>,
     currentPrice: number,
     config: BacktestConfig,
     futureData: MarketDataPoint[]
-  ): Promise<void> {
+  ): BacktestResult | null {
+    if (currentPrice <= 0) return null;
+
     // Calculate position size
-    const riskPerTrade = config.parameters.riskPerTrade || 0.02; // 2% risk
-    const maxPosition = this.currentCapital * riskPerTrade;
+    const riskPerTrade = (config.parameters.riskPerTrade as number) || 0.02;
+    const maxPosition = currentPrice * riskPerTrade * 10; // Simplified position sizing
     const quantity = maxPosition / currentPrice;
 
     // Apply slippage
@@ -127,7 +143,11 @@ export class BacktestEngine {
     const stopLoss = signal.stopLoss || entryPrice * 0.95;
     const takeProfit = signal.takeProfit || entryPrice * 1.05;
 
-    for (const dataPoint of futureData) {
+    // Limit how far into the future we look for exit (max 100 candles)
+    const maxLookAhead = Math.min(futureData.length, 100);
+
+    for (let j = 0; j < maxLookAhead; j++) {
+      const dataPoint = futureData[j];
       const high = dataPoint.high;
       const low = dataPoint.low;
 
@@ -164,7 +184,7 @@ export class BacktestEngine {
 
     // If no exit found, close at last price
     if (!exitPrice && futureData.length > 0) {
-      const lastCandle = futureData[futureData.length - 1];
+      const lastCandle = futureData[Math.min(futureData.length - 1, maxLookAhead - 1)];
       exitPrice = lastCandle.close;
       exitTime = lastCandle.timestamp;
       exitReason = 'End of Period';
@@ -182,14 +202,10 @@ export class BacktestEngine {
         pnl = (entryPrice - exitPrice) * quantity - feeAmount;
       }
 
-      const pnlPercent = pnl / (entryPrice * quantity);
+      const pnlPercent = entryPrice > 0 ? pnl / (entryPrice * quantity) : 0;
 
-      // Update capital
-      this.currentCapital += pnl;
-
-      // Record trade
-      this.trades.push({
-        id: `trade-${this.trades.length}`,
+      return {
+        id: `trade-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         sessionId: '',
         symbol: signal.symbol,
         action: signal.action,
@@ -201,8 +217,10 @@ export class BacktestEngine {
         executedAt: new Date(),
         closedAt: exitTime,
         notes: exitReason
-      });
+      };
     }
+
+    return null;
   }
 
   /**
@@ -220,16 +238,27 @@ export class BacktestEngine {
     const hour = 60 * 60 * 1000;
 
     // Generate realistic price movements
-    let price = 40000 + Math.random() * 10000; // Starting price
+    const basePrices: Record<string, number> = {
+      BTCUSDT: 45000, ETHUSDT: 2500, SOLUSDT: 100,
+      BNBUSDT: 300, XRPUSDT: 0.5
+    };
+    let price = basePrices[symbol] || 100;
+
+    // Use a seeded random for more consistent results
+    let seed = symbol.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const seededRandom = () => {
+      seed = (seed * 16807) % 2147483647;
+      return (seed - 1) / 2147483646;
+    };
 
     for (let timestamp = start; timestamp <= end; timestamp += hour) {
       // Random walk with drift
-      const change = (Math.random() - 0.48) * price * 0.02; // Slight upward bias
+      const change = (seededRandom() - 0.48) * price * 0.02; // Slight upward bias
       const open = price;
       const close = price + change;
-      const high = Math.max(open, close) + Math.random() * Math.abs(change) * 0.5;
-      const low = Math.min(open, close) - Math.random() * Math.abs(change) * 0.5;
-      const volume = 1000 + Math.random() * 5000;
+      const high = Math.max(open, close) + seededRandom() * Math.abs(change) * 0.5;
+      const low = Math.min(open, close) - seededRandom() * Math.abs(change) * 0.5;
+      const volume = 1000 + seededRandom() * 5000;
 
       data.push({
         symbol,
@@ -250,52 +279,66 @@ export class BacktestEngine {
 
   /**
    * Calculate performance metrics
+   * Fixed: Now takes trades and equity curve as parameters (no shared state)
    */
   private calculatePerformanceMetrics(
     initialCapital: number,
-    finalCapital: number
+    finalCapital: number,
+    trades: BacktestResult[],
+    equityCurve: number[]
   ): PerformanceMetrics {
-    const winningTrades = this.trades.filter(t => (t.pnl || 0) > 0);
-    const losingTrades = this.trades.filter(t => (t.pnl || 0) <= 0);
+    const winningTrades = trades.filter(t => (t.pnl || 0) > 0);
+    const losingTrades = trades.filter(t => (t.pnl || 0) <= 0);
 
-    const totalReturn = ((finalCapital - initialCapital) / initialCapital) * 100;
+    const totalReturn = initialCapital > 0 
+      ? ((finalCapital - initialCapital) / initialCapital) * 100 
+      : 0;
 
-    // Calculate annualized return (assuming 365 days)
-    const days = 365;
-    const annualizedReturn = ((Math.pow(finalCapital / initialCapital, 365 / days) - 1) * 100);
+    // Calculate annualized return
+    const annualizedReturn = initialCapital > 0 
+      ? ((Math.pow(finalCapital / initialCapital, 365 / 365) - 1) * 100) 
+      : 0;
 
-    // Calculate Sharpe Ratio
-    const returns = this.trades.map(t => t.pnlPercent || 0);
-    const avgReturn = returns.reduce((a, b) => a + b, 0) / returns.length || 0;
-    const stdDev = Math.sqrt(
-      returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length
-    ) || 0;
+    // Calculate Sharpe Ratio from trade returns
+    const returns = trades.map(t => t.pnlPercent || 0);
+    const avgReturn = returns.length > 0 
+      ? returns.reduce((a, b) => a + b, 0) / returns.length 
+      : 0;
+    const stdDev = returns.length > 1
+      ? Math.sqrt(
+          returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / (returns.length - 1)
+        )
+      : 0;
     const sharpeRatio = stdDev > 0 ? (avgReturn / stdDev) * Math.sqrt(252) : 0;
 
-    // Calculate Sortino Ratio (downside deviation)
+    // Calculate Sortino Ratio (downside deviation only)
     const downsideReturns = returns.filter(r => r < 0);
-    const downsideDev = Math.sqrt(
-      downsideReturns.reduce((sum, r) => sum + Math.pow(r, 2), 0) / downsideReturns.length
-    ) || 0;
+    const downsideDev = downsideReturns.length > 1
+      ? Math.sqrt(
+          downsideReturns.reduce((sum, r) => sum + Math.pow(r, 2), 0) / (downsideReturns.length - 1)
+        )
+      : 0;
     const sortinoRatio = downsideDev > 0 ? (avgReturn / downsideDev) * Math.sqrt(252) : 0;
 
     // Calculate max drawdown
     let maxDrawdown = 0;
-    let peak = this.equityCurve[0] || initialCapital;
+    let peak = equityCurve[0] || initialCapital;
     
-    for (const equity of this.equityCurve) {
+    for (const equity of equityCurve) {
       if (equity > peak) {
         peak = equity;
       }
-      const drawdown = (peak - equity) / peak;
-      if (drawdown > maxDrawdown) {
-        maxDrawdown = drawdown;
+      if (peak > 0) {
+        const drawdown = (peak - equity) / peak;
+        if (drawdown > maxDrawdown) {
+          maxDrawdown = drawdown;
+        }
       }
     }
 
     // Win rate
-    const winRate = this.trades.length > 0 
-      ? winningTrades.length / this.trades.length 
+    const winRate = trades.length > 0 
+      ? (winningTrades.length / trades.length) * 100
       : 0;
 
     // Profit factor
@@ -317,11 +360,11 @@ export class BacktestEngine {
       sharpeRatio,
       sortinoRatio,
       maxDrawdown: maxDrawdown * 100,
-      winRate: winRate * 100,
+      winRate,
       profitFactor,
       averageWin,
       averageLoss,
-      totalTrades: this.trades.length,
+      totalTrades: trades.length,
       winningTrades: winningTrades.length,
       losingTrades: losingTrades.length
     };
@@ -358,15 +401,21 @@ export class BacktestEngine {
         slippage: 0.001
       };
 
-      const session = await this.runBacktest(config);
-      
-      if (session.status === 'COMPLETED') {
-        const metrics = this.calculatePerformanceMetrics(
-          config.initialCapital,
-          session.finalCapital || config.initialCapital
-        );
+      try {
+        const session = await this.runBacktest(config);
+        
+        if (session.status === 'COMPLETED') {
+          const metrics = this.calculatePerformanceMetrics(
+            config.initialCapital,
+            session.finalCapital || config.initialCapital,
+            session.results,
+            []
+          );
 
-        results.push({ parameters: params, metrics });
+          results.push({ parameters: params, metrics });
+        }
+      } catch (error) {
+        console.error('Optimization run failed:', error);
       }
     }
 
@@ -429,9 +478,13 @@ export class BacktestEngine {
    * Generate backtest report
    */
   generateReport(session: BacktestSession): string {
+    const initialCapital = session.initialCapital;
+    const finalCapital = session.finalCapital || initialCapital;
     const metrics = this.calculatePerformanceMetrics(
-      session.initialCapital,
-      session.finalCapital || session.initialCapital
+      initialCapital,
+      finalCapital,
+      session.results,
+      []
     );
 
     return `
@@ -441,7 +494,7 @@ export class BacktestEngine {
 - Symbol: ${session.symbol}
 - Period: ${session.startDate.toDateString()} - ${session.endDate.toDateString()}
 - Initial Capital: $${session.initialCapital.toLocaleString()}
-- Final Capital: $${(session.finalCapital || session.initialCapital).toLocaleString()}
+- Final Capital: $${finalCapital.toLocaleString()}
 
 ## Performance Metrics
 - Total Return: ${metrics.totalReturn.toFixed(2)}%
