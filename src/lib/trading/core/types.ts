@@ -328,6 +328,7 @@ export interface NewsQuery {
   endDate?: Date;
   limit?: number;
   minImportance?: number;
+  rssUrls?: string[];
 }
 
 export interface BacktestConfig {

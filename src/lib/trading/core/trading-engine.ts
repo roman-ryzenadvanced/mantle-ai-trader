@@ -58,14 +58,27 @@ export class BybitClient {
 
   /**
    * Generate signature for authenticated requests
+   * Fixed: POST requests use raw JSON body, GET requests use sorted query params
+   * Per Bybit V5 API specification
    */
-  private generateSignature(params: Record<string, unknown>, timestamp: number): string {
-    const queryString = Object.keys(params)
-      .sort()
-      .map(key => `${key}=${params[key]}`)
-      .join('&');
+  private generateSignature(
+    params: Record<string, unknown>,
+    timestamp: number,
+    method: 'GET' | 'POST' = 'GET'
+  ): string {
+    let paramString: string;
+    if (method === 'POST') {
+      // POST: use raw JSON body string
+      paramString = JSON.stringify(params);
+    } else {
+      // GET: use alphabetically sorted query string
+      paramString = Object.keys(params)
+        .sort()
+        .map(key => `${key}=${params[key]}`)
+        .join('&');
+    }
 
-    const signString = `${timestamp}${this.config.apiKey}5000${queryString}`;
+    const signString = `${timestamp}${this.config.apiKey}5000${paramString}`;
     return crypto
       .createHmac('sha256', this.config.apiSecret)
       .update(signString)
@@ -81,7 +94,7 @@ export class BybitClient {
     params: Record<string, unknown> = {}
   ): Promise<APIResponse<T>> {
     const timestamp = Date.now();
-    const signature = this.generateSignature(params, timestamp);
+    const signature = this.generateSignature(params, timestamp, method);
 
     const headers = {
       'X-BAPI-API-KEY': this.config.apiKey,
@@ -305,6 +318,16 @@ export class BybitClient {
 
     if (params.price && params.orderType !== OrderType.MARKET) {
       requestParams.price = params.price.toString();
+      // Bybit V5 requires timeInForce for Limit orders
+      requestParams.timeInForce = 'GTC'; // Good Till Cancel
+    }
+
+    // Handle stop/conditional orders
+    if (params.orderType === OrderType.STOP_MARKET || params.orderType === OrderType.STOP_LIMIT) {
+      if (params.price) {
+        requestParams.triggerPrice = params.price.toString();
+        requestParams.triggerBy = 'LastPrice';
+      }
     }
 
     if (params.stopLoss) {
@@ -315,9 +338,13 @@ export class BybitClient {
       requestParams.takeProfit = params.takeProfit.toString();
     }
 
-    // Set leverage if specified
-    if (params.leverage && params.leverage !== 1) {
-      await this.setLeverage(params.symbol, params.leverage);
+    // Set leverage if specified (always set to avoid stale leverage from previous trades)
+    if (params.leverage && params.leverage > 0) {
+      try {
+        await this.setLeverage(params.symbol, params.leverage);
+      } catch {
+        // Bybit returns 110043 if leverage already set to same value - safe to ignore
+      }
     }
 
     const response = await this.authenticatedRequest<BybitOrderResponse>(

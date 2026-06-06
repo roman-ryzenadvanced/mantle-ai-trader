@@ -542,10 +542,11 @@ function detectPatterns(
     const secondClose = closes[len - 2];
     const secondOpen = opens[len - 2];
     const secondBody = Math.abs(secondClose - secondOpen);
-    const secondRange = Math.max(secondOpen, secondClose) - Math.min(secondOpen, secondClose);
+    // Fixed: Use high-low range (full candle), not just body range
+    const secondRange = highs[len - 2] - lows[len - 2];
     
     if (firstClose < firstOpen && // First bearish
-        (secondRange === 0 || secondBody < secondRange * 0.3) && // Small body (fixed: guard against zero)
+        (secondRange === 0 || secondBody < secondRange * 0.3) && // Small body relative to full range
         lastClose > lastOpen && lastClose > (firstOpen + firstClose) / 2) { // Bullish third
       patterns.push('MORNING_STAR');
     }
@@ -558,7 +559,8 @@ function detectPatterns(
     const secondClose = closes[len - 2];
     const secondOpen = opens[len - 2];
     const secondBody = Math.abs(secondClose - secondOpen);
-    const secondRange = Math.max(secondOpen, secondClose) - Math.min(secondOpen, secondClose);
+    // Fixed: Use high-low range (full candle), not just body range
+    const secondRange = highs[len - 2] - lows[len - 2];
 
     if (firstClose > firstOpen && // First bullish
         (secondRange === 0 || secondBody < secondRange * 0.3) && // Small body
@@ -610,19 +612,23 @@ export function calculateIchimoku(
   priceVsCloud: 'ABOVE' | 'BELOW' | 'INSIDE';
 } {
   // Helper: calculate the midpoint of the highest high and lowest low over N periods
-  const midPoint = (arr: number[], period: number): number => {
-    if (arr.length < period) return arr[arr.length - 1] || 0;
-    const slice = arr.slice(-period);
-    const high = Math.max(...slice);
-    const low = Math.min(...slice);
-    return (high + low) / 2;
+  // Fixed: Ichimoku requires (highest_high + lowest_low) / 2 using BOTH arrays
+  const midPointHL = (highArr: number[], lowArr: number[], period: number): number => {
+    if (highArr.length < period || lowArr.length < period) {
+      return highArr.length > 0 ? (highArr[highArr.length - 1] + lowArr[lowArr.length - 1]) / 2 : 0;
+    }
+    const highSlice = highArr.slice(-period);
+    const lowSlice = lowArr.slice(-period);
+    const highestHigh = Math.max(...highSlice);
+    const lowestLow = Math.min(...lowSlice);
+    return (highestHigh + lowestLow) / 2;
   };
 
   // Tenkan-sen (Conversion Line)
-  const tenkanSen = midPoint(highs, tenkanPeriod);
+  const tenkanSen = midPointHL(highs, lows, tenkanPeriod);
 
   // Kijun-sen (Base Line)
-  const kijunSen = midPoint(highs, kijunPeriod);
+  const kijunSen = midPointHL(highs, lows, kijunPeriod);
 
   // For Senkou spans, we need historical data projected forward.
   // Since we can only compute from available data, we use the most recent values.
@@ -632,17 +638,17 @@ export function calculateIchimoku(
   // Senkou Span A: (Tenkan + Kijun) / 2
   // For historical context, we compute using data from `displacement` periods ago
   const historicalTenkan = highs.length > displacement + tenkanPeriod
-    ? midPoint(highs.slice(0, -displacement), tenkanPeriod)
+    ? midPointHL(highs.slice(0, -displacement), lows.slice(0, -displacement), tenkanPeriod)
     : tenkanSen;
   const historicalKijun = highs.length > displacement + kijunPeriod
-    ? midPoint(highs.slice(0, -displacement), kijunPeriod)
+    ? midPointHL(highs.slice(0, -displacement), lows.slice(0, -displacement), kijunPeriod)
     : kijunSen;
   const senkouSpanA = (historicalTenkan + historicalKijun) / 2;
 
   // Senkou Span B: (52-period high + 52-period low) / 2
   const senkouSpanB = highs.length > displacement + senkouPeriod
-    ? midPoint(highs.slice(0, -displacement), senkouPeriod)
-    : midPoint(highs, senkouPeriod);
+    ? midPointHL(highs.slice(0, -displacement), lows.slice(0, -displacement), senkouPeriod)
+    : midPointHL(highs, lows, senkouPeriod);
 
   // Chikou Span: Current close plotted 26 periods back
   const chikouSpan = closes.length > displacement
@@ -1072,13 +1078,13 @@ export class SignalEngine {
       }
     }
 
-    // Bollinger Bands extended scoring
+    // Bollinger Bands extended scoring (only for extreme conditions beyond basic thresholds)
     if (bollingerBands.percentB > 1) {
-      // Price above upper band - overbought
-      score -= 0.1;
+      // Price above upper band - strongly overbought (only add if not already scored above)
+      score -= 0.05; // Reduced from 0.1 to avoid double-counting with basic BB scoring
     } else if (bollingerBands.percentB < 0) {
-      // Price below lower band - oversold
-      score += 0.1;
+      // Price below lower band - strongly oversold
+      score += 0.05; // Reduced from 0.1 to avoid double-counting with basic BB scoring
     }
 
     // ADX directional bias (+DI vs -DI)
@@ -1421,10 +1427,11 @@ export class SignalEngine {
     fundamental: FundamentalAnalysis,
     sentiment: SentimentAnalysis
   ): number {
+    // Rebalanced: Technical signals are the primary driver for short-term trading
     const weights = {
-      technical: 0.4,
-      fundamental: 0.3,
-      sentiment: 0.3
+      technical: 0.50,
+      fundamental: 0.25,
+      sentiment: 0.25
     };
 
     return (
@@ -1650,19 +1657,23 @@ Provide a concise trading rationale:`;
       riskFactors.push('Indecision pattern detected');
     }
 
-    // Max recommended position based on risk level
+    // Max recommended position as fraction of capital (not canceling out)
+    // Returns a multiplier: conservative=1%, moderate=3%, aggressive=5% of capital
     const maxPositionMultiplier = riskLevel === RiskLevel.CONSERVATIVE ? 0.01 : 
                                    riskLevel === RiskLevel.MODERATE ? 0.03 : 0.05;
+
+    // Calculate dynamic liquidity risk based on volatility
+    const liquidityRisk = Math.min(0.9, Math.max(0.1, volatility * 5));
 
     return {
       riskScore,
       riskLevel,
-      maxRecommendedPosition: lastPrice * 10 * maxPositionMultiplier / lastPrice, // Risk-adjusted
+      maxRecommendedPosition: maxPositionMultiplier, // Fraction of capital to risk
       suggestedStopLoss,
       suggestedTakeProfit,
       riskFactors,
       marketVolatility: volatility,
-      liquidityRisk: 0.2 // Assume good liquidity for major pairs
+      liquidityRisk
     };
   }
 
@@ -1754,7 +1765,12 @@ Provide a concise trading rationale:`;
 
   private identifyEconomicFactors(articles: NewsArticle[]): string[] {
     const factors: string[] = [];
-    const keywords = ['inflation', 'interest rate', 'fed', 'regulation', 'adoption', 'institutional'];
+    const keywords = [
+      'inflation', 'interest rate', 'fed', 'regulation', 'adoption', 'institutional',
+      'etf', 'halving', 'whale', 'treasury', 'gdp', 'cpi', 'employment',
+      'stablecoin', 'cbdc', 'defi', 'yield', 'liquidity', 'tapering',
+      'quantitative easing', 'default', 'sanctions', 'tariff', 'recession'
+    ];
     
     articles.forEach(article => {
       const text = article.title.toLowerCase();
@@ -1855,5 +1871,5 @@ export function getSignalEngine(): SignalEngine {
   return _signalEngine;
 }
 
-// Keep backward compatibility
-export const signalEngine = new SignalEngine();
+// Keep backward compatibility - use the lazy singleton
+export const signalEngine = getSignalEngine();

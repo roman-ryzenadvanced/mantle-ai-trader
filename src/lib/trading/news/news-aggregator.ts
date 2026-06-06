@@ -37,13 +37,23 @@ const SENTIMENT_KEYWORDS = {
     'bullish', 'surge', 'rally', 'breakout', 'gain', 'rise', 'soar', 'pump',
     'positive', 'growth', 'adoption', 'partnership', 'launch', 'upgrade',
     'milestone', 'achievement', 'success', 'profit', 'bull run', 'moon',
-    'institutional', 'investment', 'buy', 'accumulate', 'support', 'hold'
+    'institutional', 'investment', 'buy', 'accumulate', 'support', 'hold',
+    'mainnet', 'airdrop', 'listing', 'integration', 'approval', 'etf',
+    'halving', 'bullish divergence', 'golden cross', 'breakout',
+    'all-time high', 'ath', 'recovery', 'rebound', 'outperform',
+    'whale accumulation', 'inflow', 'demand', 'expansion', 'scaling',
+    'deflationary', 'burn', 'staking reward', 'yield', 'tvl increase'
   ],
   bearish: [
     'bearish', 'crash', 'dump', 'decline', 'fall', 'drop', 'sell-off',
     'negative', 'loss', 'risk', 'warning', 'concern', 'hack', 'exploit',
     'regulation', 'ban', 'restrict', 'fraud', 'scam', 'bear market',
-    'liquidation', 'bankruptcy', 'investigation', 'lawsuit', 'fine'
+    'liquidation', 'bankruptcy', 'investigation', 'lawsuit', 'fine',
+    'delisting', 'rug pull', 'ponzi', 'death cross', 'bearish divergence',
+    'outflow', 'whale dump', 'fud', 'fear', 'panic', 'capitulation',
+    'vulnerability', 'breach', 'insolvency', 'sec action', 'crackdown',
+    'money laundering', 'sanctions', 'recession', 'contagion', 'depeg',
+    'frozen', 'suspension', 'collapse', 'correction', 'overvalued'
   ]
 };
 
@@ -147,6 +157,14 @@ export class NewsAggregator {
         return this.fetchCoinGecko(query);
       case NewsSource.CRYPTOCOMPARE:
         return this.fetchCryptoCompare(query);
+      case NewsSource.CUSTOM_RSS:
+        if (query.rssUrls && query.rssUrls.length > 0) {
+          const allRss = await Promise.all(
+            query.rssUrls.map(url => this.fetchFromRSS(url))
+          );
+          return allRss.flat();
+        }
+        return [];
       default:
         return [];
     }

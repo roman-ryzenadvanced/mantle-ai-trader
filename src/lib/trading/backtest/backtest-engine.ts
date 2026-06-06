@@ -44,7 +44,8 @@ export class BacktestEngine {
     let trades: BacktestResult[] = [];
     let equityCurve: number[] = [];
     let currentCapital = config.initialCapital;
-    let lastTradeIndex = -10; // Prevent overtrading - minimum 10 candles between trades
+    const cooldownPeriod = (config.parameters.cooldownCandles as number) || 10;
+    let lastTradeIndex = -cooldownPeriod; // Prevent overtrading
 
     try {
       // Generate simulated historical data (in production, fetch from API)
@@ -60,7 +61,7 @@ export class BacktestEngine {
         const currentPrice = historicalData[i].close;
 
         // Only consider trading if we haven't traded too recently (cooldown)
-        if (i - lastTradeIndex >= 10) {
+        if (i - lastTradeIndex >= cooldownPeriod) {
           // Generate signal
           const signalOutput = await signalEngine.generateSignal({
             symbol: config.symbol,
@@ -75,7 +76,8 @@ export class BacktestEngine {
               signalOutput.signal,
               currentPrice,
               config,
-              historicalData.slice(i)
+              historicalData.slice(i),
+              currentCapital
             );
 
             if (tradeResult) {
@@ -125,14 +127,21 @@ export class BacktestEngine {
     signal: Omit<Signal, 'id' | 'createdAt' | 'updatedAt'>,
     currentPrice: number,
     config: BacktestConfig,
-    futureData: MarketDataPoint[]
+    futureData: MarketDataPoint[],
+    currentCapital: number = 10000
   ): BacktestResult | null {
     if (currentPrice <= 0) return null;
 
-    // Calculate position size
+    // Calculate position size based on current capital and risk
     const riskPerTrade = (config.parameters.riskPerTrade as number) || 0.02;
-    const maxPosition = currentPrice * riskPerTrade * 10; // Simplified position sizing
-    const quantity = maxPosition / currentPrice;
+    const stopLossPrice = signal.stopLoss || currentPrice * 0.95;
+    const stopDistance = Math.abs(currentPrice - stopLossPrice);
+    // Risk-based position sizing: risk amount / stop distance = position size
+    // This ensures each trade risks exactly riskPerTrade % of capital
+    const riskAmount = currentCapital * riskPerTrade;
+    const quantity = stopDistance > 0 
+      ? Math.min(riskAmount / stopDistance, (currentCapital * 0.5) / currentPrice) // Cap at 50% of capital
+      : (currentCapital * riskPerTrade * 0.1) / currentPrice; // Fallback: small position
 
     // Apply slippage
     const slippage = config.slippage || 0.001;
@@ -355,7 +364,7 @@ export class BacktestEngine {
     // Profit factor
     const grossProfit = winningTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
     const grossLoss = Math.abs(losingTrades.reduce((sum, t) => sum + (t.pnl || 0), 0));
-    const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : 0;
+    const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : (grossProfit > 0 ? Infinity : 0);
 
     // Average win/loss
     const averageWin = winningTrades.length > 0
