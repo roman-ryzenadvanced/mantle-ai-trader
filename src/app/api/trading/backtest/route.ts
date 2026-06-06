@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { backtestEngine } from '@/lib/trading/backtest/backtest-engine';
 import { db } from '@/lib/db';
+import { getAuthUser, handleAuthError } from '@/lib/api-auth';
 
 // ==================== ZOD SCHEMAS ====================
 
@@ -45,13 +46,18 @@ const runBacktestSchema = z.object({
 // GET /api/trading/backtest - Get backtest sessions
 export async function GET(request: NextRequest) {
   try {
+    const { userId } = await getAuthUser(request);
     const sessions = await db.backtestSession.findMany({
+      where: { userId },
       orderBy: { createdAt: 'desc' },
       include: { results: true }
     });
 
     return NextResponse.json({ success: true, data: sessions });
   } catch (error) {
+    if (error instanceof Error && error.message === 'Authentication required') {
+      return handleAuthError(error);
+    }
     console.error('Error fetching backtest sessions:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to fetch backtest sessions' },
@@ -63,6 +69,7 @@ export async function GET(request: NextRequest) {
 // POST /api/trading/backtest - Run backtest
 export async function POST(request: NextRequest) {
   try {
+    const { userId } = await getAuthUser(request);
     const body = await request.json();
     
     const validation = runBacktestSchema.safeParse(body);
@@ -83,7 +90,8 @@ export async function POST(request: NextRequest) {
         startDate: new Date(startDate),
         endDate: new Date(endDate),
         initialCapital,
-        status: 'RUNNING'
+        status: 'RUNNING',
+        userId,
       }
     });
 
@@ -143,6 +151,9 @@ export async function POST(request: NextRequest) {
       }
     });
   } catch (error) {
+    if (error instanceof Error && error.message === 'Authentication required') {
+      return handleAuthError(error);
+    }
     console.error('Error running backtest:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to run backtest' },

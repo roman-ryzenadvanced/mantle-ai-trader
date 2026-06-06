@@ -3,16 +3,20 @@ import { db } from '@/lib/db';
 import { createBybitClient } from '@/lib/trading/core/trading-engine';
 import { TradeAction, OrderType, RiskLevel } from '@/lib/trading/core/types';
 import { z } from 'zod';
+import { getAuthUser, handleAuthError, AuthError } from '@/lib/api-auth';
+import { decrypt } from '@/lib/crypto';
 
-// Helper: get the active exchange account and create a BybitClient
-async function getLiveClient() {
-  const account = await db.exchangeAccount.findFirst({ where: { isActive: true } });
+// Helper: get the active exchange account for a user and create a BybitClient
+async function getLiveClient(userId: string) {
+  const account = await db.exchangeAccount.findFirst({ where: { isActive: true, userId } });
   if (!account) {
     throw new Error('No active exchange account configured. Go to Settings to add and activate an account.');
   }
+  const apiKey = decrypt(account.apiKey, userId);
+  const apiSecret = decrypt(account.apiSecret, userId);
   const client = createBybitClient({
-    apiKey: account.apiKey,
-    apiSecret: account.apiSecret,
+    apiKey,
+    apiSecret,
     testnet: account.testnet,
     riskLevel: RiskLevel.MODERATE,
     maxPositionSize: 1000,
@@ -47,13 +51,14 @@ const liveActionSchema = z.discriminatedUnion('action', [placeOrderSchema, close
 // GET /api/trading/live — fetch live data
 export async function GET(request: NextRequest) {
   try {
+    const { userId } = await getAuthUser(request);
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action');
 
     let client: Awaited<ReturnType<typeof getLiveClient>>['client'];
 
     try {
-      const result = await getLiveClient();
+      const result = await getLiveClient(userId);
       client = result.client;
     } catch (err) {
       return NextResponse.json(
@@ -109,6 +114,7 @@ export async function GET(request: NextRequest) {
 // POST /api/trading/live — execute live actions
 export async function POST(request: NextRequest) {
   try {
+    const { userId } = await getAuthUser(request);
     const body = await request.json();
     const validation = liveActionSchema.safeParse(body);
     if (!validation.success) {
@@ -120,7 +126,7 @@ export async function POST(request: NextRequest) {
 
     let client: Awaited<ReturnType<typeof getLiveClient>>['client'];
     try {
-      const result = await getLiveClient();
+      const result = await getLiveClient(userId);
       client = result.client;
     } catch (err) {
       return NextResponse.json(

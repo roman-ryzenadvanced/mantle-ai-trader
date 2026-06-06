@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSession, signOut } from 'next-auth/react';
 import { io, Socket } from 'socket.io-client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,7 +24,7 @@ import {
   AlertCircle, Info, X, Flame, Gauge as GaugeIcon, ShieldAlert,
   ChevronUp, ChevronDown, MoveDown, Percent, Repeat,
   ArrowUpRight, ArrowDownRight, Crosshair, Timer, Layers, CandlestickChart,
-  Radio, RadioTower, Power, Eye, EyeOff, ScanSearch, NewspaperIcon
+  Radio, RadioTower, Power, Eye, EyeOff, ScanSearch, NewspaperIcon, LogOut, User
 } from 'lucide-react';
 
 // Types
@@ -205,6 +206,8 @@ const SCAN_INTERVALS = [
 const COLORS = ['#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
 
 export default function TradingDashboard() {
+  const { data: session, status } = useSession();
+
   // State
   const [connected, setConnected] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(true);
@@ -1099,6 +1102,35 @@ export default function TradingDashboard() {
           </Alert>
         )}
 
+        {/* Auth Guard */}
+        {status === 'loading' && (
+          <div className="flex items-center justify-center py-20">
+            <RefreshCw className="h-8 w-8 animate-spin mr-3" />
+            Loading...
+          </div>
+        )}
+        {status === 'unauthenticated' && (
+          <div className="flex flex-col items-center justify-center py-20 gap-4">
+            <h1 className="text-3xl font-bold flex items-center gap-2">
+              <Brain className="h-8 w-8 text-primary" />
+              Mantle AI Trader
+            </h1>
+            <p className="text-muted-foreground text-center max-w-md">
+              AI-powered cryptocurrency trading platform. Sign in to access your portfolio, place trades, and track your performance.
+            </p>
+            <div className="flex gap-3 mt-2">
+              <Button onClick={() => window.location.href = '/login'}>
+                Sign in
+              </Button>
+              <Button variant="outline" onClick={() => window.location.href = '/register'}>
+                Create account
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {status === 'authenticated' && (
+        <>
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
@@ -1158,6 +1190,16 @@ export default function TradingDashboard() {
                 Reset Demo
               </Button>
             )}
+            {/* User Menu */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => signOut({ callbackUrl: '/login' })}
+              title="Sign out"
+            >
+              <User className="h-4 w-4 mr-1" />
+              {session?.user?.name || session?.user?.email || 'User'}
+            </Button>
           </div>
         </div>
 
@@ -3589,6 +3631,8 @@ export default function TradingDashboard() {
             </a>
           </p>
         </footer>
+        </>
+        )}
       </div>
     </div>
   );

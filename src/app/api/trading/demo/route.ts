@@ -5,8 +5,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { demoTrader } from '@/lib/trading/demo/demo-trader';
+import { getDemoTrader } from '@/lib/trading/demo/demo-trader';
 import { TradeAction, OrderType } from '@/lib/trading/core/types';
+import { getAuthUser, handleAuthError } from '@/lib/api-auth';
 
 // ==================== ZOD SCHEMAS ====================
 
@@ -83,58 +84,61 @@ const demoActionSchema = z.discriminatedUnion('action', [
 // GET /api/trading/demo/portfolio - Get portfolio
 export async function GET(request: NextRequest) {
   try {
+    const { userId } = await getAuthUser(request);
+    const trader = getDemoTrader(userId);
+
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action');
 
     switch (action) {
       case 'portfolio':
-        return NextResponse.json({ 
-          success: true, 
-          data: demoTrader.getPortfolio() 
+        return NextResponse.json({
+          success: true,
+          data: trader.getPortfolio()
         });
 
       case 'positions':
-        return NextResponse.json({ 
-          success: true, 
-          data: demoTrader.getPositions() 
+        return NextResponse.json({
+          success: true,
+          data: trader.getPositions()
         });
 
       case 'orders':
-        return NextResponse.json({ 
-          success: true, 
-          data: demoTrader.getOpenOrders() 
+        return NextResponse.json({
+          success: true,
+          data: trader.getOpenOrders()
         });
 
       case 'history':
-        return NextResponse.json({ 
-          success: true, 
-          data: demoTrader.getTradeHistory() 
+        return NextResponse.json({
+          success: true,
+          data: trader.getTradeHistory()
         });
 
       case 'statistics':
-        return NextResponse.json({ 
-          success: true, 
+        return NextResponse.json({
+          success: true,
           data: {
-            ...demoTrader.getStatistics(),
-            totalFees: demoTrader.getTotalFees(),
-            realizedTrades: demoTrader.getRealizedTrades()
+            ...trader.getStatistics(),
+            totalFees: trader.getTotalFees(),
+            realizedTrades: trader.getRealizedTrades()
           }
         });
 
       case 'realized_trades':
         return NextResponse.json({
           success: true,
-          data: demoTrader.getRealizedTrades()
+          data: trader.getRealizedTrades()
         });
 
       case 'sync':
         return NextResponse.json({
           success: true,
           data: {
-            portfolio: demoTrader.getPortfolio(),
-            positions: demoTrader.getPositions(),
-            tradeHistory: demoTrader.getTradeHistory(),
-            realizedTrades: demoTrader.getRealizedTrades(),
+            portfolio: trader.getPortfolio(),
+            positions: trader.getPositions(),
+            tradeHistory: trader.getTradeHistory(),
+            realizedTrades: trader.getRealizedTrades(),
           }
         });
 
@@ -142,17 +146,20 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
           success: true,
           data: {
-            portfolio: demoTrader.getPortfolio(),
-            positions: demoTrader.getPositions(),
-            orders: demoTrader.getOpenOrders(),
+            portfolio: trader.getPortfolio(),
+            positions: trader.getPositions(),
+            orders: trader.getOpenOrders(),
             statistics: {
-              ...demoTrader.getStatistics(),
-              totalFees: demoTrader.getTotalFees()
+              ...trader.getStatistics(),
+              totalFees: trader.getTotalFees()
             }
           }
         });
     }
   } catch (error) {
+    if (error instanceof Error && error.message === 'Authentication required') {
+      return handleAuthError(error);
+    }
     console.error('Error getting demo data:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to get demo data' },
@@ -164,6 +171,9 @@ export async function GET(request: NextRequest) {
 // POST /api/trading/demo - Execute demo trading actions
 export async function POST(request: NextRequest) {
   try {
+    const { userId } = await getAuthUser(request);
+    const trader = getDemoTrader(userId);
+
     const body = await request.json();
     
     const validation = demoActionSchema.safeParse(body);
@@ -178,7 +188,7 @@ export async function POST(request: NextRequest) {
 
     switch (validatedData.action) {
       case 'place_order': {
-        const order = demoTrader.placeOrder({
+        const order = trader.placeOrder({
           symbol: validatedData.symbol,
           side: validatedData.side as TradeAction,
           type: validatedData.type as OrderType,
@@ -192,7 +202,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'close_position': {
-        const order = demoTrader.closePosition(validatedData.symbol, validatedData.quantity);
+        const order = trader.closePosition(validatedData.symbol, validatedData.quantity);
         if (!order) {
           return NextResponse.json(
             { success: false, error: 'Position not found' },
@@ -203,7 +213,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'close_position_partial': {
-        const order = demoTrader.closePositionPartial(validatedData.symbol, validatedData.percent);
+        const order = trader.closePositionPartial(validatedData.symbol, validatedData.percent);
         if (!order) {
           return NextResponse.json(
             { success: false, error: 'Position not found' },
@@ -214,7 +224,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'set_trailing_stop': {
-        const result = demoTrader.setTrailingStop(validatedData.symbol, validatedData.distance);
+        const result = trader.setTrailingStop(validatedData.symbol, validatedData.distance);
         if (!result) {
           return NextResponse.json(
             { success: false, error: 'Position not found or invalid distance' },
@@ -225,7 +235,7 @@ export async function POST(request: NextRequest) {
       }
 
       case 'average_position': {
-        const order = demoTrader.averagePosition(validatedData.symbol, validatedData.quantity, validatedData.orderType as OrderType);
+        const order = trader.averagePosition(validatedData.symbol, validatedData.quantity, validatedData.orderType as OrderType);
         if (!order) {
           return NextResponse.json(
             { success: false, error: 'Position not found' },
@@ -236,28 +246,28 @@ export async function POST(request: NextRequest) {
       }
 
       case 'cancel_order': {
-        const cancelled = demoTrader.cancelOrder(validatedData.orderId);
+        const cancelled = trader.cancelOrder(validatedData.orderId);
         return NextResponse.json({ success: cancelled });
       }
 
       case 'reset': {
-        demoTrader.reset(validatedData.initialCapital);
+        trader.reset(validatedData.initialCapital);
         return NextResponse.json({ 
           success: true, 
-          data: demoTrader.getPortfolio() 
+          data: trader.getPortfolio() 
         });
       }
 
       case 'update_price': {
-        demoTrader.updatePrice(validatedData.symbol, validatedData.price);
+        trader.updatePrice(validatedData.symbol, validatedData.price);
         // Also check for margin calls after price update
         // QA-FIX #10: checkMarginCall now returns an object {isMarginCall, closedSymbols}
-        const marginResult = demoTrader.checkMarginCall();
+        const marginResult = trader.checkMarginCall();
         return NextResponse.json({ success: true, data: { marginCalls: marginResult.closedSymbols, isMarginCall: marginResult.isMarginCall } });
       }
 
       case 'set_margin_call_threshold': {
-        demoTrader.setMarginCallThreshold(validatedData.threshold);
+        trader.setMarginCallThreshold(validatedData.threshold);
         return NextResponse.json({ success: true, data: { threshold: validatedData.threshold } });
       }
 
@@ -268,6 +278,9 @@ export async function POST(request: NextRequest) {
         );
     }
   } catch (error) {
+    if (error instanceof Error && error.message === 'Authentication required') {
+      return handleAuthError(error);
+    }
     console.error('Error executing demo action:', error);
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(

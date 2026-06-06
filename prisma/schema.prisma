@@ -1,5 +1,5 @@
 // Prisma Schema for Mantle AI Trading Bot
-// Comprehensive database schema for signals, trades, backtests, and news
+// v3.5.0 — Multi-tenant user management with isolated data per user
 
 generator client {
   provider = "prisma-client-js"
@@ -10,7 +10,30 @@ datasource db {
   url      = "file:./data/mantle-trader.db"
 }
 
-// Signal Management
+// ==================== USER MODEL ====================
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  passwordHash    String
+  name            String?
+  isAdmin         Boolean   @default(false)
+  initialBalance  Float     @default(100000)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  exchangeAccounts ExchangeAccount[]
+  signals          Signal[]
+  trades           Trade[]
+  portfolios       Portfolio[]
+  demoStates       DemoState[]
+  settings         UserSettings[]
+  signalRatings    SignalRating[]
+  backtestSessions BacktestSession[]
+}
+
+// ==================== SIGNAL MANAGEMENT ====================
+
 model Signal {
   id              String      @id @default(uuid())
   symbol          String      // Trading pair e.g., "BTCUSDT"
@@ -33,16 +56,20 @@ model Signal {
   demo            Boolean     @default(false) // Is this a demo signal?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
-  
+
+  userId          String?     // Nullable for system-generated signals
+  user            User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
   trades          Trade[]
   backtestResults BacktestResult[]
-  
+
   @@index([symbol])
   @@index([status])
   @@index([createdAt])
+  @@index([userId])
 }
 
-// Trade Execution
+// ==================== TRADE EXECUTION ====================
+
 model Trade {
   id              String    @id @default(uuid())
   signalId        String?
@@ -65,12 +92,17 @@ model Trade {
   notes           String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
-  
+
+  userId          String?
+  user            User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([symbol])
   @@index([status])
+  @@index([userId])
 }
 
-// News Articles
+// ==================== NEWS (shared, not user-scoped) ====================
+
 model NewsArticle {
   id              String    @id @default(uuid())
   title           String
@@ -82,20 +114,21 @@ model NewsArticle {
   category        String?   // e.g., "Bitcoin", "DeFi", "Regulation"
   sentiment       Float?    // -1 to 1
   importance      Float?    // 0 to 1
-  tags            String?   // JSON array
+  tags            String?    // JSON array
   publishedAt     DateTime?
   fetchedAt       DateTime  @default(now())
   processed       Boolean   @default(false)
   vectorId        String?   // ChromaDB vector ID
   createdAt       DateTime  @default(now())
-  
+
   @@unique([sourceUrl])
   @@index([source])
   @@index([category])
   @@index([publishedAt])
 }
 
-// Market Data Cache
+// ==================== MARKET DATA (shared) ====================
+
 model MarketData {
   id              String    @id @default(uuid())
   symbol          String
@@ -107,12 +140,13 @@ model MarketData {
   volume          Float
   timestamp       DateTime
   createdAt       DateTime  @default(now())
-  
+
   @@unique([symbol, timeframe, timestamp])
   @@index([symbol, timeframe])
 }
 
-// Backtest Sessions
+// ==================== BACKTEST ====================
+
 model BacktestSession {
   id              String    @id @default(uuid())
   name            String
@@ -130,11 +164,14 @@ model BacktestSession {
   config          String?   // JSON configuration
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
-  
+
+  userId          String
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   results         BacktestResult[]
-  
+
   @@index([symbol])
   @@index([status])
+  @@index([userId])
 }
 
 model BacktestResult {
@@ -154,11 +191,12 @@ model BacktestResult {
   closedAt        DateTime?
   notes           String?
   createdAt       DateTime        @default(now())
-  
+
   @@index([sessionId])
 }
 
-// Portfolio Tracking
+// ==================== PORTFOLIO ====================
+
 model Portfolio {
   id              String    @id @default(uuid())
   name            String    @default("Main Portfolio")
@@ -170,10 +208,13 @@ model Portfolio {
   isActive        Boolean   @default(true)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
-  
+
+  userId          String
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   positions       Position[]
-  
+
   @@index([isActive])
+  @@index([userId])
 }
 
 model Position {
@@ -193,12 +234,13 @@ model Position {
   closedAt        DateTime?
   status          String    @default("OPEN") // OPEN | CLOSED
   demo            Boolean   @default(false)
-  
+
   @@index([portfolioId])
   @@index([symbol])
 }
 
-// User Settings & API Keys (Encrypted in production)
+// ==================== USER SETTINGS ====================
+
 model UserSettings {
   id              String    @id @default(uuid())
   bybitApiKey     String?
@@ -213,13 +255,17 @@ model UserSettings {
   discordWebhook  String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// Exchange API Accounts (for live trading)
+// ==================== EXCHANGE ACCOUNTS ====================
+
 model ExchangeAccount {
   id          String    @id @default(uuid())
   name        String    @default("Bybit Main")
-  exchange    String    @default("bybit") // bybit | binance (future)
+  exchange    String    @default("bybit") // bybit | binance | okx | ...
   apiKey      String
   apiSecret   String
   testnet     Boolean   @default(true)
@@ -228,11 +274,19 @@ model ExchangeAccount {
   lastError   String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
-// Demo Trading Persistence — stores serialized demo trader state
+// ==================== DEMO STATE (per-user) ====================
+
 model DemoState {
-  id              String   @id @default("singleton")
+  id              String   @id @default("demo-default") // Changed from "singleton"
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   portfolioData   String   // JSON: portfolio values
   positionsData   String   // JSON: open positions map
   realizedData    String   // JSON: realized trades
@@ -240,19 +294,23 @@ model DemoState {
   updatedAt       DateTime @updatedAt
 }
 
-// Signal Rating History
+// ==================== SIGNAL RATINGS ====================
+
 model SignalRating {
   id              String    @id @default(uuid())
   signalId        String
   rating          Int       // 1-5
   feedback        String?
-  userId          String?
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt       DateTime  @default(now())
-  
+
   @@index([signalId])
+  @@index([userId])
 }
 
-// System Logs
+// ==================== SYSTEM LOGS ====================
+
 model SystemLog {
   id              String    @id @default(uuid())
   level           String    // INFO | WARNING | ERROR | CRITICAL
@@ -260,7 +318,7 @@ model SystemLog {
   message         String
   details         String?   // JSON additional data
   createdAt       DateTime  @default(now())
-  
+
   @@index([level])
   @@index([component])
   @@index([createdAt])

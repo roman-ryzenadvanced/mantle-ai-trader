@@ -124,6 +124,7 @@ export class DemoTrader {
   private portfolio: Portfolio;
   private positions: Map<string, DemoPosition> = new Map();
   private orders: DemoOrder[] = [];
+  private readonly userId: string;
   private tradeHistory: DemoOrder[] = [];
   private currentPrices: Map<string, number> = new Map();
   private listeners: Set<(event: string, data: unknown) => void> = new Set();
@@ -142,7 +143,8 @@ export class DemoTrader {
   private circuitBreakerConfig: CircuitBreakerConfig;
   private _persistTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(initialCapital: number = 10000, commissionRates?: Partial<CommissionRates>, circuitBreakerConfig?: Partial<CircuitBreakerConfig>) {
+  constructor(userId: string, initialCapital: number = 10000, commissionRates?: Partial<CommissionRates>, circuitBreakerConfig?: Partial<CircuitBreakerConfig>) {
+    this.userId = userId;
     this.portfolio = {
       id: 'demo-portfolio',
       name: 'Demo Portfolio',
@@ -239,11 +241,13 @@ export class DemoTrader {
         recoveryWins: this.recoveryWins,
       });
 
-      // Upsert the singleton row
+      const stateId = `demo-${this.userId}`;
+
+      // Upsert the user's demo state row
       db.demoState.upsert({
-        where: { id: 'singleton' },
+        where: { id: stateId },
         update: { portfolioData, positionsData, realizedData, circuitData },
-        create: { id: 'singleton', portfolioData, positionsData, realizedData, circuitData },
+        create: { id: stateId, userId: this.userId, portfolioData, positionsData, realizedData, circuitData },
       }).catch(err => {
         console.error('DemoTrader: persist error:', err.message);
       });
@@ -257,7 +261,7 @@ export class DemoTrader {
    */
   private async restoreFromDB(): Promise<void> {
     try {
-      const state = await db.demoState.findUnique({ where: { id: 'singleton' } });
+      const state = await db.demoState.findUnique({ where: { userId: this.userId } });
       if (!state) return;
 
       // Restore portfolio
@@ -1364,5 +1368,17 @@ export class DemoTrader {
   }
 }
 
-// Export singleton
-export const demoTrader = new DemoTrader();
+// Per-user DemoTrader instances
+const traders = new Map<string, DemoTrader>();
+
+export function getDemoTrader(userId: string): DemoTrader {
+  let trader = traders.get(userId);
+  if (!trader) {
+    trader = new DemoTrader(userId);
+    traders.set(userId, trader);
+  }
+  return trader;
+}
+
+// Backward compatibility — returns a default trader (useful for unauthenticated contexts)
+export const demoTrader = new DemoTrader("default");

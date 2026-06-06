@@ -9,6 +9,7 @@ import { signalEngine } from '@/lib/trading/signals/signal-engine';
 import { newsAggregator } from '@/lib/trading/news/news-aggregator';
 import { TimeFrame } from '@/lib/trading/core/types';
 import { db } from '@/lib/db';
+import { getAuthUser, handleAuthError } from '@/lib/api-auth';
 
 // ==================== ZOD SCHEMAS ====================
 
@@ -36,9 +37,10 @@ const generateSignalSchema = z.object({
 // GET /api/trading/signals - Get signals
 export async function GET(request: NextRequest) {
   try {
+    const { userId } = await getAuthUser(request);
     const { searchParams } = new URL(request.url);
     const params = Object.fromEntries(searchParams.entries());
-    
+
     const validation = getSignalsSchema.safeParse(params);
     if (!validation.success) {
       return NextResponse.json(
@@ -49,7 +51,7 @@ export async function GET(request: NextRequest) {
 
     const { symbol, status, limit } = validation.data;
 
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = { userId };
     if (symbol) where.symbol = symbol;
     if (status) where.status = status;
 
@@ -61,6 +63,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: signals });
   } catch (error) {
+    if (error instanceof Error && error.message === 'Authentication required') {
+      return handleAuthError(error);
+    }
     console.error('Error fetching signals:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to fetch signals' },
@@ -72,6 +77,7 @@ export async function GET(request: NextRequest) {
 // POST /api/trading/signals - Generate new signal
 export async function POST(request: NextRequest) {
   try {
+    const { userId } = await getAuthUser(request);
     const body = await request.json();
     
     const validation = generateSignalSchema.safeParse(body);
@@ -121,7 +127,8 @@ export async function POST(request: NextRequest) {
         technicalScore: signalOutput.signal.technicalScore,
         fundamentalScore: signalOutput.signal.fundamentalScore,
         status: 'PENDING',
-        demo
+        demo,
+        userId,
       }
     });
 
@@ -136,6 +143,9 @@ export async function POST(request: NextRequest) {
       }
     });
   } catch (error) {
+    if (error instanceof Error && error.message === 'Authentication required') {
+      return handleAuthError(error);
+    }
     console.error('Error generating signal:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to generate signal' },

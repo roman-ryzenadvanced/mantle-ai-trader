@@ -3,6 +3,8 @@ import { db } from '@/lib/db';
 import { createBybitClient } from '@/lib/trading/core/trading-engine';
 import { RiskLevel } from '@/lib/trading/core/types';
 import { z } from 'zod';
+import { getAuthUser, handleAuthError } from '@/lib/api-auth';
+import { encrypt, decrypt } from '@/lib/crypto';
 
 const saveAccountSchema = z.object({
   action: z.literal('save'),
@@ -42,27 +44,33 @@ function maskKey(key: string): string {
 }
 
 // GET /api/trading/settings — list all accounts
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { userId } = await getAuthUser(request);
     const accounts = await db.exchangeAccount.findMany({
+      where: { userId },
       orderBy: { createdAt: 'desc' },
     });
 
     return NextResponse.json({
       success: true,
-      data: accounts.map(a => ({
-        id: a.id,
-        name: a.name,
-        exchange: a.exchange,
-        apiKey: maskKey(a.apiKey),
-        apiSecret: maskKey(a.apiSecret),
-        testnet: a.testnet,
-        isActive: a.isActive,
-        lastTested: a.lastTested,
-        lastError: a.lastError,
-        createdAt: a.createdAt,
-        updatedAt: a.updatedAt,
-      })),
+      data: accounts.map(a => {
+        const apiKey = decrypt(a.apiKey, userId);
+        const apiSecret = decrypt(a.apiSecret, userId);
+        return {
+          id: a.id,
+          name: a.name,
+          exchange: a.exchange,
+          apiKey: maskKey(apiKey),
+          apiSecret: maskKey(apiSecret),
+          testnet: a.testnet,
+          isActive: a.isActive,
+          lastTested: a.lastTested,
+          lastError: a.lastError,
+          createdAt: a.createdAt,
+          updatedAt: a.updatedAt,
+        };
+      }),
     });
   } catch (error) {
     console.error('Error fetching settings:', error);
@@ -73,6 +81,7 @@ export async function GET() {
 // POST /api/trading/settings — save/test/delete/activate account
 export async function POST(request: NextRequest) {
   try {
+    const { userId } = await getAuthUser(request);
     const body = await request.json();
     const validation = settingsActionSchema.safeParse(body);
     if (!validation.success) {
@@ -97,8 +106,8 @@ export async function POST(request: NextRequest) {
             data: {
               name: data.name,
               exchange: data.exchange,
-              apiKey: data.apiKey,
-              apiSecret: data.apiSecret,
+              apiKey: encrypt(data.apiKey, userId),
+              apiSecret: encrypt(data.apiSecret, userId),
               testnet: data.testnet,
             },
           });
@@ -108,9 +117,10 @@ export async function POST(request: NextRequest) {
             data: {
               name: data.name,
               exchange: data.exchange,
-              apiKey: data.apiKey,
-              apiSecret: data.apiSecret,
+              apiKey: encrypt(data.apiKey, userId),
+              apiSecret: encrypt(data.apiSecret, userId),
               testnet: data.testnet,
+              userId,
             },
           });
           return NextResponse.json({ success: true, data: { id: created.id, maskedKey: maskKey(created.apiKey) } });
@@ -123,10 +133,13 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ success: false, error: 'Account not found' }, { status: 404 });
         }
 
+        const apiKey = decrypt(account.apiKey, userId);
+        const apiSecret = decrypt(account.apiSecret, userId);
+
         try {
           const client = createBybitClient({
-            apiKey: account.apiKey,
-            apiSecret: account.apiSecret,
+            apiKey,
+            apiSecret,
             testnet: account.testnet,
             riskLevel: RiskLevel.MODERATE,
             maxPositionSize: 1000,
@@ -180,8 +193,8 @@ export async function POST(request: NextRequest) {
       }
 
       case 'activate': {
-        // Deactivate all, then activate the chosen one
-        await db.exchangeAccount.updateMany({ data: { isActive: false } });
+        // Deactivate all user's accounts, then activate the chosen one
+        await db.exchangeAccount.updateMany({ where: { userId }, data: { isActive: false } });
         await db.exchangeAccount.update({
           where: { id: data.id },
           data: { isActive: true },
@@ -193,6 +206,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, error: 'Invalid action' }, { status: 400 });
     }
   } catch (error) {
+    if (error instanceof Error && error.message === 'Authentication required') {
+      return handleAuthError(error);
+    }
     console.error('Error in settings:', error);
     return NextResponse.json({ success: false, error: 'Internal error' }, { status: 500 });
   }
