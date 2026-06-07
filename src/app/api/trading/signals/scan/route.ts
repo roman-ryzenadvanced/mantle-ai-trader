@@ -57,22 +57,30 @@ export async function POST(request: NextRequest) {
     // Fetch news (shared across all pairs)
     const news = await newsAggregator.fetchAllNews({ limit: 20 });
 
-    // Run scan
-    const results = await signalEngine.scanPairs(
+    // Run technical scan (all strategy+symbol combos)
+    const techResults = await signalEngine.scanPairs(
       symbols,
       strategies.map(s => s as StrategyType),
       timeframe as TimeFrame,
       news
     );
 
+    // Also generate news-based signals
+    const newsResults = await signalEngine.generateNewsSignals(symbols, news);
+
+    // Combine both: technical + news signals
+    const allResults = [...techResults, ...newsResults];
+
     return NextResponse.json({
       success: true,
-      data: results,
+      data: allResults,
       meta: {
         symbolsScanned: symbols.length,
         strategiesUsed: strategies.length,
         totalCombos: symbols.length * strategies.length,
-        actionableSignals: results.length,
+        technicalSignals: techResults.length,
+        newsSignals: newsResults.length,
+        actionableSignals: allResults.length,
         timestamp: new Date().toISOString(),
       }
     });

@@ -497,28 +497,32 @@ export default function TradingDashboard() {
 
       const newSignals: ActiveScanSignal[] = [];
 
-      // Process scan results
+      // Process scan results — may include both technical (nested .signal) and news (flat) shapes
       const scanResult = results[0];
       if (scanResult.status === 'fulfilled' && scanResult.value.success) {
         for (const r of scanResult.value.data) {
+          // Technical results have nested .signal; news results are flat with .symbol at top level
+          const isNewsSignal = !r.signal && typeof r.symbol === 'string';
+          const sigData = isNewsSignal ? r : r.signal;
+
           newSignals.push({
             signal: {
               id: `scan-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-              symbol: r.signal.symbol,
-              action: r.signal.action as 'BUY' | 'SELL' | 'HOLD',
-              confidence: r.signal.confidence,
-              rating: r.signal.rating,
-              reasoning: r.signal.reasoning,
-              status: 'PENDING',
+              symbol: sigData.symbol || r.strategyName || 'UNKNOWN',
+              action: (sigData.action || r.signalType || 'HOLD') as 'BUY' | 'SELL' | 'HOLD',
+              confidence: sigData.confidence ?? 50,
+              rating: Math.round((sigData.confidence ?? 50) / 10),
+              reasoning: sigData.reasoning || `${r.strategyName || 'Scan'} analysis`,
+              status: 'PENDING' as const,
               createdAt: new Date().toISOString(),
               demo: true,
             },
             analysis: r.analysis,
             riskAssessment: r.riskAssessment,
             details: r.signalDetails,
-            strategyName: r.strategyName,
-            signalType: r.signalType,
-            scannedAt: r.scannedAt,
+            strategyName: r.strategyName || (isNewsSignal ? 'NEWS' : undefined),
+            signalType: r.signalType || (isNewsSignal ? 'NEWS' : undefined),
+            scannedAt: r.scannedAt || r.generatedAt,
           });
         }
       }
@@ -1723,7 +1727,7 @@ export default function TradingDashboard() {
                                 <div className="text-right">
                                   <div className="text-xs text-muted-foreground">Current Price</div>
                                   <div className="font-mono font-bold text-lg">
-                                    ${as.details.currentPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                    ${as.details.currentPrice?.toLocaleString(undefined, { maximumFractionDigits: 2 }) ?? '—'}
                                   </div>
                                 </div>
                               )}
@@ -1761,13 +1765,13 @@ export default function TradingDashboard() {
                                     <Crosshair className="h-3 w-3" /> Entry Zone
                                   </div>
                                   <div className="font-mono font-semibold text-sm">
-                                    ${as.details.entryZone.low.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                    ${as.details.entryZone?.low?.toLocaleString(undefined, { maximumFractionDigits: 2 }) ?? '—'}
                                   </div>
                                   <div className="text-xs text-muted-foreground">to</div>
                                   <div className="font-mono font-semibold text-sm">
-                                    ${as.details.entryZone.high.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                    ${as.details.entryZone?.high?.toLocaleString(undefined, { maximumFractionDigits: 2 }) ?? '—'}
                                   </div>
-                                  <Badge variant="outline" className="text-[10px] mt-1">{as.details.entryZone.strategy}</Badge>
+                                  <Badge variant="outline" className="text-[10px] mt-1">{as.details.entryZone?.strategy ?? '—'}</Badge>
                                 </div>
 
                                 {/* Stop Loss */}
@@ -1776,12 +1780,14 @@ export default function TradingDashboard() {
                                     <ShieldAlert className="h-3 w-3" /> Stop Loss
                                   </div>
                                   <div className="font-mono font-semibold text-sm text-red-400">
-                                    ${as.details.stopLoss.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                    ${as.details.stopLoss?.price?.toLocaleString(undefined, { maximumFractionDigits: 2 }) ?? '—'}
                                   </div>
                                   <div className="text-xs text-red-300">
-                                    {as.details.stopLoss.percentFromEntry >= 0 ? '+' : ''}{as.details.stopLoss.percentFromEntry.toFixed(1)}%
+                                    {as.details.stopLoss?.percentFromEntry != null
+                                      ? `${as.details.stopLoss.percentFromEntry >= 0 ? '+' : ''}${as.details.stopLoss.percentFromEntry.toFixed(1)}%`
+                                      : '—'}
                                   </div>
-                                  <div className="text-[10px] text-muted-foreground mt-1">{as.details.stopLoss.type}</div>
+                                  <div className="text-[10px] text-muted-foreground mt-1">{as.details.stopLoss?.type ?? '—'}</div>
                                 </div>
 
                                 {/* TP Levels */}
@@ -1789,7 +1795,7 @@ export default function TradingDashboard() {
                                   <div className="flex items-center gap-1 text-xs text-green-400 mb-1">
                                     <Target className="h-3 w-3" /> Take Profits
                                   </div>
-                                  {as.details.takeProfitLevels.map((tp) => (
+                                  {as.details.takeProfitLevels?.map((tp) => (
                                     <div key={tp.level} className="flex justify-between text-[11px]">
                                       <span className="text-green-300">TP{tp.level}</span>
                                       <span className="font-mono">
@@ -1797,7 +1803,7 @@ export default function TradingDashboard() {
                                         <span className="text-green-400 ml-1">({tp.percentFromEntry >= 0 ? '+' : ''}{tp.percentFromEntry.toFixed(1)}%)</span>
                                       </span>
                                     </div>
-                                  ))}
+                                  )) ?? <span className="text-[11px] text-muted-foreground">No TP levels</span>}
                                 </div>
 
                                 {/* Risk:Reward */}
@@ -1806,10 +1812,10 @@ export default function TradingDashboard() {
                                     <Activity className="h-3 w-3" /> Risk : Reward
                                   </div>
                                   <div className="font-bold text-lg text-purple-300">
-                                    1 : {as.details.riskRewardRatio.toFixed(1)}
+                                    1 : {as.details.riskRewardRatio?.toFixed(1) ?? '—'}
                                   </div>
                                   <div className="text-[10px] text-muted-foreground mt-1">
-                                    {as.details.riskRewardRatio >= 2 ? 'Favorable' : as.details.riskRewardRatio >= 1 ? 'Moderate' : 'Unfavorable'}
+                                    {(as.details.riskRewardRatio ?? 0) >= 2 ? 'Favorable' : (as.details.riskRewardRatio ?? 0) >= 1 ? 'Moderate' : 'Unfavorable'}
                                   </div>
                                 </div>
 
@@ -1819,10 +1825,10 @@ export default function TradingDashboard() {
                                     <Zap className="h-3 w-3" /> Leverage
                                   </div>
                                   <div className="font-bold text-lg text-amber-300">
-                                    {as.details.leverage.min}x - {as.details.leverage.max}x
+                                    {as.details.leverage?.min ?? '—'}x - {as.details.leverage?.max ?? '—'}x
                                   </div>
                                   <div className="text-[10px] text-muted-foreground mt-1">
-                                    Rec: {as.details.leverage.recommended}x
+                                    Rec: {as.details.leverage?.recommended ?? '—'}x
                                   </div>
                                 </div>
 
@@ -1832,22 +1838,22 @@ export default function TradingDashboard() {
                                     <Timer className="h-3 w-3" /> Time Horizon
                                   </div>
                                   <div className="font-bold text-sm text-cyan-300">
-                                    {as.details.timeHorizon}
+                                    {as.details.timeHorizon ?? '—'}
                                   </div>
                                   <div className="text-[10px] text-muted-foreground mt-1">
-                                    {as.details.volatility.label} vol
+                                    {as.details.volatility?.label ?? '—'} vol
                                   </div>
                                 </div>
                               </div>
 
                               {/* TP position sizing guide */}
                               <div className="flex gap-2">
-                                {as.details.takeProfitLevels.map((tp) => (
+                                {as.details.takeProfitLevels?.map((tp) => (
                                   <div key={tp.level} className="flex-1 p-2 rounded border text-center text-xs">
                                     <div className="text-muted-foreground">TP{tp.level} — close {tp.positionPercent}%</div>
                                     <div className="text-muted-foreground text-[10px]">{tp.description}</div>
                                   </div>
-                                ))}
+                                )) ?? <span className="text-xs text-muted-foreground">No TP sizing data</span>}
                               </div>
 
                               {/* Score bars */}
@@ -1873,7 +1879,7 @@ export default function TradingDashboard() {
                                 <div className="flex items-center gap-2 text-sm font-semibold mb-2">
                                   <BarChart3 className="h-4 w-4" /> Market Context
                                 </div>
-                                <p className="text-sm text-muted-foreground">{as.details.marketContext}</p>
+                                <p className="text-sm text-muted-foreground">{as.details.marketContext || 'No context available'}</p>
                               </div>
 
                               {/* Price Action */}
@@ -1882,11 +1888,11 @@ export default function TradingDashboard() {
                                   <CandlestickChart className="h-4 w-4" /> Price Action
                                 </div>
                                 <ul className="space-y-1">
-                                  {as.details.priceActionNotes.map((note, i) => (
+                                  {as.details.priceActionNotes?.map((note, i) => (
                                     <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
                                       <span className="text-primary mt-0.5">&#8226;</span> {note}
                                     </li>
-                                  ))}
+                                  )) ?? <li className="text-sm text-muted-foreground">No price action notes</li>}
                                 </ul>
                               </div>
 
@@ -1896,7 +1902,7 @@ export default function TradingDashboard() {
                                   <Layers className="h-4 w-4" /> Indicators
                                 </div>
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                  {as.details.indicatorSummary.map((ind, i) => (
+                                  {as.details.indicatorSummary?.map((ind, i) => (
                                     <div key={i} className="p-2 rounded border text-xs">
                                       <div className="flex justify-between items-center">
                                         <span className="font-medium">{ind.name}</span>
@@ -1904,10 +1910,10 @@ export default function TradingDashboard() {
                                           {ind.signal}
                                         </Badge>
                                       </div>
-                                      <div className="font-mono text-muted-foreground">{ind.value.toFixed(1)}</div>
-                                      <div className="text-muted-foreground text-[10px]">{ind.note}</div>
+                                      <div className="font-mono text-muted-foreground">{ind.value?.toFixed(1) ?? '—'}</div>
+                                      <div className="text-muted-foreground text-[10px]">{ind.note ?? ''}</div>
                                     </div>
-                                  ))}
+                                  )) ?? <span className="text-xs text-muted-foreground col-span-full">No indicator summary</span>}
                                 </div>
                               </div>
 
@@ -1919,21 +1925,21 @@ export default function TradingDashboard() {
                                 <div className="grid grid-cols-2 gap-4 text-sm">
                                   <div>
                                     <span className="text-green-500">Support:</span>{' '}
-                                    {as.details.keyLevels.supports.length > 0
+                                    {as.details.keyLevels?.supports && as.details.keyLevels.supports.length > 0
                                       ? as.details.keyLevels.supports.map(s => `$${s.toLocaleString(undefined, { maximumFractionDigits: 2 })}`).join(', ')
-                                      : `$${as.details.keyLevels.nearestSupport.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+                                      : `$${as.details.keyLevels?.nearestSupport?.toLocaleString(undefined, { maximumFractionDigits: 2 }) ?? '—'}`}
                                   </div>
                                   <div>
                                     <span className="text-red-500">Resistance:</span>{' '}
-                                    {as.details.keyLevels.resistances.length > 0
+                                    {as.details.keyLevels?.resistances && as.details.keyLevels.resistances.length > 0
                                       ? as.details.keyLevels.resistances.map(r => `$${r.toLocaleString(undefined, { maximumFractionDigits: 2 })}`).join(', ')
-                                      : `$${as.details.keyLevels.nearestResistance.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+                                      : `$${as.details.keyLevels?.nearestResistance?.toLocaleString(undefined, { maximumFractionDigits: 2 }) ?? '—'}`}
                                   </div>
                                 </div>
                               </div>
 
                               {/* Pattern Analysis */}
-                              {as.details.patternAnalysis.detected.length > 0 && (
+                              {as.details.patternAnalysis?.detected && as.details.patternAnalysis.detected.length > 0 && (
                                 <div>
                                   <div className="flex items-center gap-2 text-sm font-semibold mb-2">
                                     <CandlestickChart className="h-4 w-4" /> Pattern Analysis
@@ -1943,15 +1949,15 @@ export default function TradingDashboard() {
                                       <Badge key={i} variant="outline">{p}</Badge>
                                     ))}
                                     <Badge variant="secondary" className="text-[10px]">
-                                      Reliability: {as.details.patternAnalysis.reliability}
+                                      Reliability: {as.details.patternAnalysis.reliability ?? '—'}
                                     </Badge>
                                   </div>
-                                  <div className="text-xs text-muted-foreground mt-1">{as.details.patternAnalysis.summary}</div>
+                                  <div className="text-xs text-muted-foreground mt-1">{as.details.patternAnalysis.summary || ''}</div>
                                 </div>
                               )}
 
                               {/* Fundamental Catalysts */}
-                              {as.details.fundamentalCatalysts.length > 0 && (
+                              {as.details.fundamentalCatalysts && as.details.fundamentalCatalysts.length > 0 && (
                                 <div>
                                   <div className="flex items-center gap-2 text-sm font-semibold mb-2">
                                     <Newspaper className="h-4 w-4" /> Fundamental Catalysts
@@ -1971,7 +1977,7 @@ export default function TradingDashboard() {
                                 <div className="flex items-center gap-2 text-sm font-semibold mb-2">
                                   <Brain className="h-4 w-4" /> AI Reasoning
                                 </div>
-                                <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">{as.signal.reasoning}</p>
+                                <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">{as.signal?.reasoning || 'No reasoning available'}</p>
                               </div>
 
                               {/* Warnings */}

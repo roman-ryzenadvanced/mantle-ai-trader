@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -8,11 +8,32 @@ import {
   Newspaper, RefreshCw, ExternalLink, AlertTriangle,
   Github, GitPullRequest, GitCommit, Star,
   TrendingUp, TrendingDown, Minus, Package, MessageSquare,
-  Activity, BarChart3
+  Activity, BarChart3, Clock, ArrowRight, Zap
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 // ==================== Types ====================
+
+// Known trading instruments and their keyword aliases for impact detection
+const INSTRUMENT_MAP: Record<string, string[]> = {
+  BTCUSDT: ['btc', 'bitcoin', 'bitcoin (btc)', '₿'],
+  ETHUSDT: ['eth', 'ethereum', 'ether', 'etherum', 'Ξ'],
+  SOLUSDT: ['sol', 'solana'],
+  BNBUSDT: ['bnb', 'binance coin'],
+  XRPUSDT: ['xrp', 'ripple'],
+  ADAUSDT: ['ada', 'cardano'],
+  DOGEUSDT: ['doge', 'dogecoin'],
+  AVAXUSDT: ['avax', 'avalanche'],
+  DOTUSDT: ['dot', 'polkadot'],
+};
+
+// Reverse lookup: keyword → instrument symbol
+const KEYWORD_TO_SYMBOL: Record<string, string> = {};
+for (const [sym, keywords] of Object.entries(INSTRUMENT_MAP)) {
+  for (const kw of keywords) {
+    KEYWORD_TO_SYMBOL[kw.toLowerCase()] = sym;
+  }
+}
 
 interface NewsArticle {
   id: string;
@@ -23,6 +44,15 @@ interface NewsArticle {
   importance?: number;
   publishedAt?: string;
   sourceUrl?: string;
+  tags?: string[];
+  content?: string;
+}
+
+interface InstrumentImpact {
+  symbol: string;        // e.g., "BTCUSDT"
+  label: string;         // e.g., "BTC"
+  direction: 'bullish' | 'bearish' | 'neutral';
+  strength: number;      // 0-1 estimated impact strength
 }
 
 interface GitHubRepoInfo {
@@ -95,6 +125,124 @@ interface MarketIntelligence {
 type Tab = 'news' | 'github';
 
 // ==================== Helpers ====================
+
+// ── Time Ago (live updating) ────────────────────────────────
+
+function TimeAgo({ dateStr, className }: { dateStr?: string; className?: string }) {
+  const [text, setText] = useState<string>('--');
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const format = useCallback((d: Date): string => {
+    const now = Date.now();
+    const diff = now - d.getTime();
+    const abs = Math.abs(diff);
+
+    // Future date
+    if (diff < 0) {
+      if (abs < 60_000) return `in ${Math.ceil(abs / 1000)}s`;
+      if (abs < 3_600_000) return `in ${Math.ceil(abs / 60_000)}m`;
+      if (abs < 86_400_000) return `in ${Math.ceil(abs / 3_600_000)}h`;
+      return `in ${Math.ceil(abs / 86_400_000)}d`;
+    }
+
+    // Past date
+    if (abs < 60_000) return `${Math.floor(abs / 1000)}s ago`;
+    if (abs < 3_600_000) return `${Math.floor(abs / 60_000)}m ago`;
+    if (abs < 86_400_000) return `${Math.floor(abs / 3_600_000)}h ago`;
+    return `${Math.floor(abs / 86_400_000)}d ago`;
+  }, []);
+
+  useEffect(() => {
+    if (!dateStr) { setText('unknown'); return; }
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) { setText('invalid'); return; }
+
+    setText(format(d));
+    // Update every 10s for recent events, every 60s for older
+    const rate = Math.abs(Date.now() - d.getTime()) < 3_600_000 ? 10_000 : 60_000;
+    intervalRef.current = setInterval(() => setText(format(d)), rate);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [dateStr, format]);
+
+  const isFuture = dateStr ? new Date(dateStr).getTime() > Date.now() : false;
+
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs ${className || ''}`}>
+      <Clock className="w-3 h-3" />
+      <span className={isFuture ? 'text-blue-600 font-medium' : 'text-muted-foreground'}>
+        {text}
+      </span>
+    </span>
+  );
+}
+
+// ── Instrument Impact Extraction ────────────────────────────
+
+function extractInstruments(article: NewsArticle): InstrumentImpact[] {
+  const text = [
+    article.title || '',
+    article.summary || '',
+    ...(article.tags || []),
+    ...(article.content ? article.content.slice(0, 500).split(/\s+/) : [])
+  ].join(' ').toLowerCase();
+
+  const found = new Map<string, { count: number; sentimentSum: number }>();
+
+  for (const [keyword, symbol] of Object.entries(KEYWORD_TO_SYMBOL)) {
+    // Count occurrences using word-boundary-like matching
+    const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+    const matches = text.match(regex);
+    if (matches && matches.length > 0) {
+      const existing = found.get(symbol) || { count: 0, sentimentSum: 0 };
+      found.set(symbol, { count: existing.count + matches.length, sentimentSum: existing.sentimentSum });
+    }
+  }
+
+  const articleSentiment = article.sentiment ?? 0;
+
+  return Array.from(found.entries()).map(([symbol, data]) => ({
+    symbol,
+    label: symbol.replace('USDT', ''),
+    direction: (
+      data.sentimentSum > 0 || (data.sentimentSum === 0 && articleSentiment > 0.15)
+        ? 'bullish'
+        : data.sentimentSum < 0 || (data.sentimentSum === 0 && articleSentiment < -0.15)
+          ? 'bearish'
+          : 'neutral'
+    ) as 'bullish' | 'bearish' | 'neutral',
+    strength: Math.min(1, Math.max(0.2, data.count * 0.25 + Math.abs(articleSentiment) * 0.3)),
+  })).sort((a, b) => b.strength - a.strength);
+}
+
+function impactColor(dir: InstrumentImpact['direction']): string {
+  switch (dir) {
+    case 'bullish': return 'bg-green-500/15 text-green-600 border-green-500/30';
+    case 'bearish': return 'bg-red-500/15 text-red-600 border-red-500/30';
+    default: return 'bg-muted text-muted-foreground border-border';
+  }
+}
+
+function impactIcon(dir: InstrumentImpact['direction']) {
+  switch (dir) {
+    case 'bullish': return <TrendingUp className="w-3 h-3" />;
+    case 'bearish': return <TrendingDown className="w-3 h-3" />;
+    default: return <Minus className="w-3 h-3" />;
+  }
+}
+
+function expectedOutcomeLabel(sentiment?: number, importance?: number): { label: string; color: string } {
+  const imp = importance ?? 0.5;
+  const sent = sentiment ?? 0;
+
+  if (sent >= 0.4 && imp >= 0.7) return { label: 'Strong bullish catalyst expected', color: 'text-green-600 bg-green-500/10 border-green-500/20' };
+  if (sent <= -0.4 && imp >= 0.7) return { label: 'Strong bearish risk detected', color: 'text-red-600 bg-red-500/10 border-red-500/20' };
+  if (sent >= 0.15) return { label: 'Mildly positive outlook', color: 'text-green-700 bg-green-500/5 border-green-500/15' };
+  if (sent <= -0.15) return { label: 'Mildly negative pressure', color: 'text-red-700 bg-red-500/5 border-red-500/15' };
+  if (imp >= 0.7) return { label: 'High-impact event — volatility likely', color: 'text-amber-600 bg-amber-500/10 border-amber-500/20' };
+  return { label: 'Monitoring for directional cues', color: 'text-muted-foreground bg-muted border-border' };
+}
+
+// ── Sentiment helpers ───────────────────────────────────────
 
 const sentimentLabel = (score?: number) => {
   if (score == null) return 'neutral';
@@ -556,49 +704,91 @@ export default function NewsPage() {
               {news.map((article) => {
                 const isBreaking = (article.importance || 0) >= 0.8;
                 const sentiment = sentimentLabel(article.sentiment);
+                const impacts = extractInstruments(article);
+                const expected = expectedOutcomeLabel(article.sentiment, article.importance);
 
                 return (
                   <div
                     key={article.id}
                     className={`bg-card border rounded-xl p-4 space-y-3 transition-colors hover:bg-accent/50 ${
-                      isBreaking ? 'border-red-500/50' : 'border-border'
+                      isBreaking ? 'border-red-500/50 border-l-4 border-l-red-500' : 'border-border'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
+                    {/* ── Header row: source + breaking badge + time ago + sentiment ── */}
+                    <div className="flex items-center justify-between flex-wrap gap-1.5">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">{article.source}</span>
+                        <span className="text-xs font-medium text-muted-foreground">{article.source}</span>
                         {isBreaking && (
-                          <span className="flex items-center gap-1 text-xs text-red-600 font-medium">
+                          <span className="inline-flex items-center gap-1 text-[10px] text-red-600 font-bold uppercase bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20 animate-pulse">
                             <AlertTriangle className="w-3 h-3" />
-                            BREAKING
+                            Breaking
+                          </span>
+                        )}
+                        {(article.importance ?? 0) >= 0.5 && !isBreaking && (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 font-medium bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                            <Zap className="w-3 h-3" />
+                            High Impact
                           </span>
                         )}
                       </div>
-                      <Badge variant="outline" className={sentimentBadgeClass[sentiment]}>
-                        {sentiment.toUpperCase()}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <TimeAgo dateStr={article.publishedAt} />
+                        <Badge variant="outline" className={`${sentimentBadgeClass[sentiment]} text-[10px] px-1.5 py-0`}>
+                          {sentiment.toUpperCase()}
+                        </Badge>
+                      </div>
                     </div>
 
-                    <h3 className="font-medium text-foreground leading-snug">{article.title}</h3>
+                    {/* ── Title ── */}
+                    <h3 className="font-semibold text-foreground leading-snug text-sm">{article.title}</h3>
 
+                    {/* ── Summary ── */}
                     {article.summary && (
-                      <p className="text-sm text-muted-foreground line-clamp-2">{article.summary}</p>
+                      <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">{article.summary}</p>
                     )}
 
-                    <div className="flex items-center justify-between pt-1">
-                      <span className="text-xs text-muted-foreground">
-                        {article.publishedAt
-                          ? new Date(article.publishedAt).toLocaleDateString()
-                          : 'Unknown date'}
-                      </span>
+                    {/* ── Expected Outcome / Trading Implication ── */}
+                    <div className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-md border ${expected.color}`}>
+                      <ArrowRight className="w-3 h-3" />
+                      {expected.label}
+                    </div>
+
+                    {/* ── Instrument Impacts ── */}
+                    {impacts.length > 0 && (
+                      <div className="space-y-1.5 pt-0.5">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Expected Impact</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {impacts.map((imp) => (
+                            <Badge key={imp.symbol} variant="outline" className={`${impactColor(imp.direction)} text-[11px] gap-1 py-0.5`}>
+                              {impactIcon(imp.direction)}
+                              {imp.label}
+                              <span className="opacity-60">
+                                {imp.direction === 'bullish' ? '+' : imp.direction === 'bearish' ? '' : '~'}
+                                {Math.round(imp.strength * 100)}%
+                              </span>
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Footer: tags + read more ── */}
+                    <div className="flex items-center justify-between pt-1 border-t border-border/50 mt-1">
+                      <div className="flex items-center gap-1 min-w-0 flex-1 mr-3">
+                        {article.tags?.slice(0, 3).map((tag) => (
+                          <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground truncate max-w-[100px]">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
                       {article.sourceUrl && (
                         <a
                           href={article.sourceUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                          className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 shrink-0 font-medium"
                         >
-                          Read more
+                          Read
                           <ExternalLink className="w-3 h-3" />
                         </a>
                       )}
