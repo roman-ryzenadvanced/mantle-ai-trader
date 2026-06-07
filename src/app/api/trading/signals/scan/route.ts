@@ -12,6 +12,23 @@ import { TimeFrame, StrategyType } from '@/lib/trading/core/types';
 const validSymbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'AVAXUSDT', 'DOTUSDT'];
 const validStrategies = Object.values(StrategyType);
 
+// Map common indicator/strategy names to our StrategyType enum
+const strategyAliases: Record<string, StrategyType> = {
+  // Exact matches (case-insensitive handled below)
+  rsi: StrategyType.MOMENTUM,
+  macd: StrategyType.MOMENTUM,
+  bollinger: StrategyType.BREAKOUT,
+  bb: StrategyType.BREAKOUT,
+  breakout: StrategyType.BREAKOUT,
+  momentum: StrategyType.MOMENTUM,
+  mean_reversion: StrategyType.MEAN_REVERSION,
+  meanreversion: StrategyType.MEAN_REVERSION,
+  vwap: StrategyType.VWAP_TWAP,
+  twap: StrategyType.VWAP_TWAP,
+  default: StrategyType.DEFAULT,
+  balanced: StrategyType.DEFAULT,
+};
+
 const scanSchema = z.object({
   symbols: z.array(z.string()).min(1).max(9).default(
     ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT']
@@ -45,22 +62,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate strategies
-    const invalidStrategies = strategies.filter(s => !validStrategies.includes(s as StrategyType));
-    if (invalidStrategies.length > 0) {
+    // Validate strategies (resolve aliases to canonical StrategyType)
+    const resolvedStrategies: StrategyType[] = strategies.map(s => {
+      const upper = s.toUpperCase();
+      if (validStrategies.includes(upper as StrategyType)) return upper as StrategyType;
+      const aliased = strategyAliases[s.toLowerCase()];
+      if (aliased) return aliased;
+      return null;
+    }).filter((s): s is StrategyType => s !== null);
+
+    if (resolvedStrategies.length === 0) {
+      const validNames = [...validStrategies, ...Object.keys(strategyAliases)].join(', ');
       return NextResponse.json(
-        { success: false, error: `Invalid strategies: ${invalidStrategies.join(', ')}` },
+        { success: false, error: `No valid strategies. Try: ${validNames}` },
         { status: 400 }
       );
     }
-
-    // Fetch news (shared across all pairs)
     const news = await newsAggregator.fetchAllNews({ limit: 20 });
 
     // Run technical scan (all strategy+symbol combos)
     const techResults = await signalEngine.scanPairs(
       symbols,
-      strategies.map(s => s as StrategyType),
+      resolvedStrategies,
       timeframe as TimeFrame,
       news
     );
@@ -76,8 +99,8 @@ export async function POST(request: NextRequest) {
       data: allResults,
       meta: {
         symbolsScanned: symbols.length,
-        strategiesUsed: strategies.length,
-        totalCombos: symbols.length * strategies.length,
+        strategiesUsed: resolvedStrategies.length,
+        totalCombos: symbols.length * resolvedStrategies.length,
         technicalSignals: techResults.length,
         newsSignals: newsResults.length,
         actionableSignals: allResults.length,

@@ -218,7 +218,7 @@ const AVAILABLE_SYMBOLS: { value: string; label: string }[] = [
 ];
 
 const DEFAULT_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT'];
-const SCAN_STRATEGIES = ['DEFAULT', 'MOMENTUM', 'BREAKOUT'];
+const SCAN_STRATEGIES = ['DEFAULT', 'MOMENTUM', 'BREAKOUT', 'MEAN_REVERSION', 'VWAP_TWAP'];
 const SCAN_TIMEFRAME = '1h';
 
 const ACTION_COLORS: Record<string, string> = {
@@ -1072,8 +1072,10 @@ export default function SignalsPage() {
 
       // Don't re-fetch DB here — scan results ARE the current truth.
       // DB fetch would overwrite in-memory scan results (and often fails with auth errors).
-    } catch {
-      toast.error('Failed to run signal scan');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to run signal scan';
+      console.error('Scan error:', err);
+      toast.error(msg);
     } finally {
       scanningRef.current = false;
       setScanning(false);

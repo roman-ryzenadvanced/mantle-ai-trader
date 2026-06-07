@@ -55,8 +55,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: accounts.map(a => {
-        const apiKey = decrypt(a.apiKey, userId);
-        const apiSecret = decrypt(a.apiSecret, userId);
+        let apiKey: string;
+        let apiSecret: string;
+        try {
+          apiKey = decrypt(a.apiKey, userId);
+          apiSecret = decrypt(a.apiSecret, userId);
+        } catch {
+          // Skip accounts with undecryptable credentials (corrupt/null keys)
+          return null;
+        }
         return {
           id: a.id,
           name: a.name,
@@ -70,9 +77,15 @@ export async function GET(request: NextRequest) {
           createdAt: a.createdAt,
           updatedAt: a.updatedAt,
         };
-      }),
+      }).filter(Boolean),
     });
   } catch (error) {
+    if (error instanceof Error && error.message === 'Authentication required') {
+      return handleAuthError(error);
+    }
+    if (error instanceof Error && error.name === 'AuthError') {
+      return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
+    }
     console.error('Error fetching settings:', error);
     return NextResponse.json({ success: false, error: 'Failed to fetch settings' }, { status: 500 });
   }

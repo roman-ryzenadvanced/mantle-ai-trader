@@ -1097,7 +1097,7 @@ export class SignalEngine {
     const signals: NewsSignal[] = [];
     const recentCutoff = Date.now() - 6 * 60 * 60 * 1000; // last 6 hours
     const recentNews = newsArticles.filter(a => {
-      const pubDate = a.publishedAt ? new Date(a.publishedAt).getTime() : a.fetchedAt.getTime();
+      const pubDate = a.publishedAt ? new Date(a.publishedAt).getTime() : (a.fetchedAt?.getTime() || Date.now());
       return pubDate >= recentCutoff && (a.importance || 0.5) >= 0.5;
     });
 
@@ -1288,11 +1288,11 @@ export class SignalEngine {
     const slPrice = risk.suggestedStopLoss;
     const slDistance = Math.abs(entryMid - slPrice);
     const slPercent = slPrice > 0 ? (slDistance / entryMid) * 100 : 0;
-    const slReasoning = technical.supportLevels.length > 0 && isBuy
+    const slReasoning = (technical.supportLevels?.length ?? 0) > 0 && isBuy
       ? `Placed below nearest support at $${technical.supportLevels[0].toLocaleString(undefined, { maximumFractionDigits: 2 })}`
       : isBuy
         ? `Volatility-based: ${(slPercent).toFixed(1)}% below entry`
-        : technical.resistanceLevels.length > 0
+        : (technical.resistanceLevels?.length ?? 0) > 0
           ? `Placed above nearest resistance at $${technical.resistanceLevels[0].toLocaleString(undefined, { maximumFractionDigits: 2 })}`
           : `Volatility-based: ${(slPercent).toFixed(1)}% above entry`;
 
