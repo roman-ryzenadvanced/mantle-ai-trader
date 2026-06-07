@@ -47,18 +47,24 @@ export default function SettingsPage() {
     try {
       const res = await fetch('/api/trading/settings');
       if (res.ok) {
-        const data = await res.json();
-        // Settings API returns exchange accounts — use localStorage for trading prefs
-        const mode = typeof window !== 'undefined'
-          ? (localStorage.getItem('mantle_trading_mode') as 'demo' | 'live') || 'demo'
-          : 'demo';
-        setSettings((prev) => ({ ...prev, tradingMode: mode }));
+        await res.json(); // API returns exchange accounts — we keep trading prefs in localStorage
       }
     } catch {
-      // Use defaults
-    } finally {
-      setLoading(false);
+      // Ignore
     }
+
+    // Load all trading preferences from localStorage
+    if (typeof window === 'undefined') { setLoading(false); return; }
+    setSettings({
+      tradingMode: (localStorage.getItem('mantle_trading_mode') as 'demo' | 'live') || 'demo',
+      riskLevel: (localStorage.getItem('mantle_risk_level') as SettingsState['riskLevel']) || 'Moderate',
+      maxPositionSize: parseInt(localStorage.getItem('mantle_max_position') || '1000', 10),
+      maxLeverage: parseInt(localStorage.getItem('mantle_max_leverage') || '10', 10),
+      autoTrading: localStorage.getItem('mantle_auto_trading') === 'true',
+      telegramEnabled: localStorage.getItem('mantle_telegram_enabled') === 'true',
+      telegramChatId: localStorage.getItem('mantle_telegram_chat_id') || '',
+    });
+    setLoading(false);
   }, []);
 
   useEffect(() => {

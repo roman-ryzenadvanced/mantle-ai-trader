@@ -17,7 +17,7 @@ interface Trade {
   leverage: number;
   pnl?: number;
   status: string;
-  createdAt: string;
+  closedAt?: string | Date;
 }
 
 type FilterTab = 'ALL' | 'OPEN' | 'CLOSED';
@@ -44,8 +44,14 @@ export default function TradesPage() {
     try {
       const res = await fetch('/api/trading/demo?action=history');
       if (res.ok) {
-        const data = await res.json();
-        setTrades(data.data || []);
+        const json = await res.json();
+        // DemoOrder uses 'type' not 'orderType', and 'closedAt' not 'createdAt'
+        const rawTrades = json.data || [];
+        setTrades(rawTrades.map((t: Record<string, unknown>) => ({
+          ...t,
+          orderType: t.orderType || t.type || 'MARKET',
+          closedAt: t.closedAt || t.filledAt || null,
+        })));
       }
     } catch {
       toast.error('Failed to fetch trade history');
@@ -186,7 +192,9 @@ export default function TradesPage() {
                   </Badge>
                 </div>
                 <span className="text-gray-500 text-xs">
-                  {new Date(trade.createdAt).toLocaleDateString()}
+                  {trade.closedAt
+                    ? new Date(trade.closedAt).toLocaleDateString()
+                    : 'N/A'}
                 </span>
               </div>
             ))}

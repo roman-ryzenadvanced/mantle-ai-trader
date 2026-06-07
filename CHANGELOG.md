@@ -2,6 +2,21 @@
 
 All notable changes to the Mantle AI Trader project.
 
+## [v3.6.2] - 2026-06-09
+
+### Fixed — End-to-End Wiring Audit
+- **Dashboard API response unwrapping** — Fixed `data.portfolio` → `data.data.portfolio` (API wraps in `{success, data}`)
+- **Dashboard `dailyPnL` field** — Portfolio type has `realizedPnL`/`unrealizedPnL`, not `dailyPnL`; now correctly sums both
+- **Dashboard equity curve** — Was reading non-existent `data.equityCurve`; now builds P&L curve from trade history
+- **Dashboard signals fetch** — Fixed `sigData.signals` → `sigData.data`; removed invalid `s.result === 'WIN'` check (Signal model has no `result` field)
+- **Dashboard "Generate Signal" action** — Was calling scan endpoint with wrong body; now correctly POSTs to `/api/trading/signals` with `{ symbol }` and shows result details
+- **Dashboard "Risk Check" action** — Was fake toast; now fetches portfolio and computes real exposure percentage
+- **Dashboard "Analytics" action** — Was no-op; now navigates to `/trades`
+- **Trades page field mapping** — DemoOrder uses `type` not `orderType`, `closedAt` not `createdAt`; now maps correctly
+- **Backtest page POST body** — Was sending `strategy` (not in API schema); now sends `riskPerTrade`, `fees`, `slippage` as required
+- **Settings page localStorage loading** — Was only loading `tradingMode`; now loads all 7 preferences on init
+- **History page** — Was "Coming Soon" placeholder with hardcoded stats; now wired to `/api/trading/demo?action=history` with real P&L stats, win rate, best/worst trade
+
 ## [v3.6.1] - 2026-06-08
 
 ### Fixed

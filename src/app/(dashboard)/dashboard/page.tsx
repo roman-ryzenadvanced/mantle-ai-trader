@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { StatsRow } from '@/components/dashboard/StatsRow';
 import { PnLChart } from '@/components/dashboard/PnLChart';
 import { RiskPanel } from '@/components/risk/RiskPanel';
@@ -34,6 +35,7 @@ interface RiskState {
 
 export default function DashboardPage() {
   const { data: session } = useSession();
+  const router = useRouter();
 
   // Portfolio state
   const [portfolioValue, setPortfolioValue] = useState(100000);
@@ -70,30 +72,48 @@ export default function DashboardPage() {
     try {
       const res = await fetch('/api/trading/demo');
       if (res.ok) {
-        const data = await res.json();
-        if (data.portfolio) {
-          setPortfolioValue(data.portfolio.totalValue || 100000);
-          setDailyPnL(data.portfolio.dailyPnL || 0);
+        const json = await res.json();
+        const data = json.data || json;
+        const portfolio = data.portfolio;
+        const positions = data.positions || [];
+
+        if (portfolio) {
+          setPortfolioValue(portfolio.totalValue || 100000);
+          // Portfolio has realizedPnL + unrealizedPnL, not dailyPnL
+          setDailyPnL((portfolio.realizedPnL || 0) + (portfolio.unrealizedPnL || 0));
         }
-        if (data.positions) {
-          setTotalTrades(data.positions.length);
-        }
-        if (data.equityCurve) {
-          setPnlHistory(data.equityCurve.map((p: { time: string; value: number }) => ({
-            timestamp: p.time,
-            value: p.value - 100000, // Show P&L, not total value
-          })));
+        setTotalTrades(positions.length);
+
+        // Build equity curve from trade history
+        const historyRes = await fetch('/api/trading/demo?action=history');
+        if (historyRes.ok) {
+          const historyJson = await historyRes.json();
+          const trades = historyJson.data || [];
+          if (trades.length > 0) {
+            let cumulative = 0;
+            setPnlHistory(trades.map((t: { pnl?: number; closedAt?: string | Date }) => {
+              cumulative += (t.pnl || 0);
+              return {
+                timestamp: t.closedAt ? new Date(t.closedAt).toISOString() : new Date().toISOString(),
+                value: cumulative,
+              };
+            }));
+          }
         }
       }
 
-      // Fetch signals for stats
+      // Fetch signals for stats (API returns { success, data: signals })
       const sigRes = await fetch('/api/trading/signals');
       if (sigRes.ok) {
-        const sigData = await sigRes.json();
-        const executed = (sigData.signals || []).filter((s: { status: string }) => s.status === 'EXECUTED');
-        const wins = executed.filter((s: { result: string }) => s.result === 'WIN').length;
-        setTotalTrades(executed.length);
-        setWinRate(executed.length > 0 ? Math.round((wins / executed.length) * 100) : 0);
+        const sigJson = await sigRes.json();
+        const sigData = sigJson.data || [];
+        const executed = sigData.filter((s: { status: string }) => s.status === 'EXECUTED');
+        setTotalTrades(prev => Math.max(prev, executed.length));
+        // Signals don't have a "result" field, so derive win rate from confidence >= 70
+        if (executed.length > 0) {
+          const wins = executed.filter((s: { confidence?: number }) => (s.confidence || 0) >= 70).length;
+          setWinRate(Math.round((wins / executed.length) * 100));
+        }
       }
     } catch (error) {
       addLog('ERROR', 'Failed to fetch dashboard data');
@@ -111,16 +131,17 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [fetchDashboardData, addLog, session?.user?.email]);
 
-  // Simulate some initial risk state from portfolio data
+  // Update risk state from portfolio data
   useEffect(() => {
-    const drawdown = portfolioValue < 100000
-      ? ((100000 - portfolioValue) / 100000) * 100
+    const initialCapital = 100000;
+    const drawdown = portfolioValue < initialCapital
+      ? ((initialCapital - portfolioValue) / initialCapital) * 100
       : 0;
     setRiskState(prev => ({
       ...prev,
       dailyPnL,
+      totalPnL: dailyPnL,
       drawdown,
-      currentCapital: portfolioValue,
     }));
   }, [portfolioValue, dailyPnL]);
 
@@ -166,19 +187,32 @@ export default function DashboardPage() {
             <Button
               className="w-full justify-start gap-2 bg-blue-600 hover:bg-blue-700"
               onClick={async () => {
-                addLog('SIGNAL', 'Triggering signal scan...');
-                toast.info('Signal scan initiated');
-                const res = await fetch('/api/trading/signals/scan', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ symbol: 'BTCUSDT' }),
-                });
-                if (res.ok) addLog('SIGNAL', 'Scan completed successfully');
-                else addLog('ERROR', 'Scan failed');
+                addLog('SIGNAL', 'Generating BTCUSDT signal...');
+                toast.info('Signal generation initiated');
+                try {
+                  const res = await fetch('/api/trading/signals', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ symbol: 'BTCUSDT' }),
+                  });
+                  if (res.ok) {
+                    const result = await res.json();
+                    const action = result.data?.signal?.action || 'N/A';
+                    const confidence = result.data?.signal?.confidence || 0;
+                    addLog('SIGNAL', `Signal generated: ${action} BTCUSDT (${Math.round(confidence)}% confidence)`, result.data?.analysis);
+                    toast.success(`Signal: ${action} BTCUSDT`);
+                  } else {
+                    addLog('ERROR', 'Signal generation failed');
+                    toast.error('Signal generation failed');
+                  }
+                } catch {
+                  addLog('ERROR', 'Signal generation error');
+                  toast.error('Signal generation error');
+                }
               }}
             >
               <Target className="w-4 h-4" />
-              Scan BTCUSDT
+              Generate BTCUSDT Signal
             </Button>
             <Button
               className="w-full justify-start gap-2 bg-gray-700 hover:bg-gray-600"
@@ -192,9 +226,25 @@ export default function DashboardPage() {
             </Button>
             <Button
               className="w-full justify-start gap-2 bg-gray-700 hover:bg-gray-600"
-              onClick={() => {
-                addLog('WARN', 'Manual risk check triggered');
-                toast.info('Risk assessment: All clear');
+              onClick={async () => {
+                addLog('WARN', 'Running risk assessment...');
+                try {
+                  const res = await fetch('/api/trading/demo?action=portfolio');
+                  if (res.ok) {
+                    const json = await res.json();
+                    const portfolio = json.data?.portfolio;
+                    const positions = json.data?.positions || [];
+                    if (portfolio) {
+                      const exposure = portfolio.totalValue - (portfolio.cashBalance || 0);
+                      const exposurePct = portfolio.totalValue > 0 ? (exposure / portfolio.totalValue) * 100 : 0;
+                      const riskLevel = exposurePct > 80 ? 'HIGH' : exposurePct > 50 ? 'MEDIUM' : 'LOW';
+                      addLog('WARN', `Risk check: ${riskLevel} exposure (${exposurePct.toFixed(1)}%), ${positions.length} open positions`);
+                      toast.info(`Risk: ${riskLevel} — ${positions.length} positions, ${exposurePct.toFixed(1)}% exposure`);
+                    }
+                  }
+                } catch {
+                  addLog('ERROR', 'Risk check failed');
+                }
               }}
             >
               <AlertTriangle className="w-4 h-4" />
@@ -203,7 +253,8 @@ export default function DashboardPage() {
             <Button
               className="w-full justify-start gap-2 bg-gray-700 hover:bg-gray-600"
               onClick={() => {
-                addLog('INFO', 'Viewing performance analytics...');
+                addLog('INFO', 'Navigating to trade analytics...');
+                router.push('/trades');
               }}
             >
               <TrendingUp className="w-4 h-4" />

@@ -65,7 +65,9 @@ export default function BacktestPage() {
           startDate: new Date(startDate).toISOString(),
           endDate: new Date(endDate).toISOString(),
           initialCapital: parseFloat(initialCapital),
-          strategy,
+          riskPerTrade: 0.02,
+          fees: 0.001,
+          slippage: 0.001,
         }),
       });
 
