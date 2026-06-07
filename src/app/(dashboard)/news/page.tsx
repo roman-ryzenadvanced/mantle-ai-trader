@@ -129,6 +129,15 @@ type CategoryFilter = RepoCategory | 'all';
 
 // ── Upcoming Event (from backend) ──
 
+interface TradeSuggestion {
+  direction: 'long' | 'short' | 'straddle' | 'avoid';
+  instrument: string;       // e.g., "BTCUSDT", "ETHUSDT"
+  strategy: string;         // e.g., "Breakout long on hot CPI", "Short into unlock"
+  rationale: string;        // e.g., "Hot CPI = risk-off → BTC drops, then bounces"
+  confidence: number;       // 0-1
+  timeframe: string;        // e.g., "1h-4h", "1d-3d"
+}
+
 interface UpcomingEvent {
   id: string;
   title: string;
@@ -140,6 +149,7 @@ interface UpcomingEvent {
   expectedMove: string;
   probability: number;
   source: string;
+  tradeSuggestions?: TradeSuggestion[];
 }
 
 // ==================== Helpers ====================
@@ -705,17 +715,36 @@ function impactConfig(impact: string): { color: string; label: string } {
 
 // ==================== Upcoming Event Card ====================
 
+// ==================== Direction badge helpers ====================
+
+function dirStyle(dir: TradeSuggestion['direction']): { bg: string; text: string; icon: React.ReactNode; label: string } {
+  switch (dir) {
+    case 'long':   return { bg: 'bg-green-500/15 border-green-500/30',    text: 'text-green-600', icon: <TrendingUp className="w-3 h-3" />, label: 'LONG' };
+    case 'short':  return { bg: 'bg-red-500/15 border-red-500/30',       text: 'text-red-600',   icon: <TrendingDown className="w-3 h-3" />, label: 'SHORT' };
+    case 'straddle': return { bg: 'bg-purple-500/15 border-purple-500/30', text: 'text-purple-600', icon: <Zap className="w-3 h-3" />, label: 'STRADDLE' };
+    default:        return { bg: 'bg-muted border-border',                 text: 'text-muted-foreground', icon: <Minus className="w-3 h-3" />, label: 'AVOID' };
+  }
+}
+
+function confidenceBar(confidence: number): string {
+  if (confidence >= 0.75) return 'bg-green-500';
+  if (confidence >= 0.55) return 'bg-yellow-500';
+  return 'bg-gray-400';
+}
+
+// ==================== Upcoming Event Card (with Trade Signals) ====================
+
 function UpcomingEventCard({ event }: { event: UpcomingEvent }) {
   const [expanded, setExpanded] = useState(false);
   const cat = EVENT_CATEGORY_CONFIG[event.category] || EVENT_CATEGORY_CONFIG.tech;
   const imp = impactConfig(event.impact);
+  const signals = event.tradeSuggestions || [];
 
   return (
     <div
-      className={`bg-card border rounded-xl p-4 space-y-3 transition-all hover:bg-accent/30 cursor-pointer ${
+      className={`bg-card border rounded-xl p-4 space-y-3 transition-all hover:bg-accent/30 ${
         event.impact === 'high' ? 'border-l-4 border-l-red-400' : 'border-border'
       }`}
-      onClick={() => setExpanded(!expanded)}
     >
       {/* Header row */}
       <div className="flex items-start justify-between gap-2">
@@ -736,7 +765,7 @@ function UpcomingEventCard({ event }: { event: UpcomingEvent }) {
         </div>
       </div>
 
-      {/* Expected move — always visible */}
+      {/* Expected move */}
       <div className="flex items-center gap-1.5 text-xs">
         <Target className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
         <span className="font-medium text-foreground">Expected:</span>
@@ -755,9 +784,62 @@ function UpcomingEventCard({ event }: { event: UpcomingEvent }) {
         ))}
       </div>
 
-      {/* Expanded explanation */}
+      {/* ═══════ TRADE SIGNAL SUGGESTIONS ═══════ */}
+      {signals.length > 0 && (
+        <div className="space-y-2 pt-1">
+          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+            <Zap className="w-3 h-3 text-amber-500" />
+            Trade Signals ({signals.length})
+          </div>
+          <div className="grid gap-1.5">
+            {signals.map((sig, i) => {
+              const d = dirStyle(sig.direction);
+              return (
+                <div
+                  key={`${sig.instrument}-${sig.direction}-${i}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className={`group relative flex items-start gap-2 p-2 rounded-lg border ${d.bg} transition-colors hover:bg-accent/50 cursor-default`}
+                >
+                  {/* Direction badge */}
+                  <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border font-bold uppercase flex-shrink-0 mt-0.5 ${d.bg} ${d.text}`}>
+                    {d.icon} {d.label}
+                  </span>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0 space-y-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-semibold text-foreground font-mono">{sig.instrument}</span>
+                      <span className="text-[10px] text-muted-foreground">·</span>
+                      <span className="text-[10px] text-muted-foreground italic">{sig.timeframe}</span>
+                    </div>
+                    <p className="text-[11px] font-medium text-foreground leading-snug">{sig.strategy}</p>
+                    <p className="text-[10px] text-muted-foreground leading-relaxed line-clamp-2">{sig.rationale}</p>
+                  </div>
+
+                  {/* Confidence indicator */}
+                  <div className="flex-shrink-0 flex flex-col items-end gap-1 mt-0.5">
+                    <span className={`text-[10px] font-mono font-semibold ${
+                      sig.confidence >= 0.75 ? 'text-green-600' : sig.confidence >= 0.55 ? 'text-yellow-600' : 'text-gray-500'
+                    }`}>
+                      {(sig.confidence * 100).toFixed(0)}%
+                    </span>
+                    <div className="w-6 h-1.5 rounded-full bg-black/5 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${confidenceBar(sig.confidence)} transition-all`}
+                        style={{ width: `${sig.confidence * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Expanded explanation (click anywhere except signals) */}
       {expanded && (
-        <div className="pt-2 border-t border-border/50 space-y-2">
+        <div className="pt-2 border-t border-border/50 space-y-2" onClick={(e) => e.stopPropagation()}>
           <p className="text-xs text-muted-foreground leading-relaxed">{event.description}</p>
           <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
             <Info className="w-3 h-3" />
@@ -766,9 +848,13 @@ function UpcomingEventCard({ event }: { event: UpcomingEvent }) {
         </div>
       )}
 
-      {/* Click-to-expand hint */}
       {!expanded && (
-        <p className="text-[10px] text-muted-foreground italic">Click to see full analysis</p>
+        <p
+          className="text-[10px] text-muted-foreground italic cursor-pointer hover:text-foreground"
+          onClick={() => setExpanded(true)}
+        >
+          Click for event details
+        </p>
       )}
     </div>
   );

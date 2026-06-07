@@ -28,6 +28,16 @@ export interface UpcomingEvent {
   expectedMove: string;
   probability: number;       // 0-1 confidence this event will occur
   source: string;
+  tradeSuggestions?: TradeSuggestion[];
+}
+
+export interface TradeSuggestion {
+  direction: 'long' | 'short' | 'straddle' | 'avoid';
+  instrument: string;
+  strategy: string;
+  rationale: string;
+  confidence: number;
+  timeframe: string;
 }
 
 // News API configurations
@@ -1057,9 +1067,332 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
   // ==================== UPCOMING EVENTS (ECONOMIC CALENDAR) ====================
 
   /**
+   * Generate contextual trade suggestions for an upcoming event.
+   * Uses event category, impact level, affected instruments and expected move
+   * to produce actionable signal ideas.
+   */
+  private generateTradeSuggestions(event: UpcomingEvent): TradeSuggestion[] {
+    const { category, impact, affectedInstruments, expectedMove, title } = event;
+    const highImpact = impact === 'high';
+    const medImpact = impact === 'medium';
+    const suggestions: TradeSuggestion[] = [];
+
+    // Map instrument names to tradeable pairs
+    const toPair = (inst: string): string => {
+      if (inst === 'BTC') return 'BTCUSDT';
+      if (inst === 'ETH') return 'ETHUSDT';
+      if (inst === 'SOL') return 'SOLUSDT';
+      if (inst === 'AAVE') return 'AAVEUSDT';
+      if (inst === 'UNI') return 'UNIUSDT';
+      if (inst.includes('XRP')) return 'XRPUSDT';
+      if (inst.includes('EUR') || inst.includes('USD') || inst === 'DXY') return 'EUR/USD';
+      if (inst.includes('JPY')) return 'USD/JPY';
+      if (inst.includes('SPY') || inst === 'SOXX' || inst.includes('NASDAQ')) return 'US500 / NAS100';
+      return `${inst}USDT`;
+    };
+
+    // ── Economics events ──
+    if (category === 'economics') {
+      const isCPI = title.toLowerCase().includes('cpi');
+      const isNFP = title.toLowerCase().includes('payroll') || title.toLowerCase().includes('nfp');
+      const isFOMC = title.toLowerCase().includes('fomc') || title.toLowerCase().includes('rate decision');
+      const isGDP = title.toLowerCase().includes('gdp');
+
+      // Always suggest a volatility straddle on high-impact economic data
+      if (highImpact) {
+        suggestions.push({
+          direction: 'straddle',
+          instrument: toPair(affectedInstruments[0] || 'BTC'),
+          strategy: 'Volatility breakout — enter both sides',
+          rationale: `${title}: Economic releases cause sharp initial moves (2-5%) then often revert. Place OCO orders above/below pre-event range; exit loser, ride winner.`,
+          confidence: isFOMC ? 0.78 : isCPI ? 0.82 : isNFP ? 0.75 : 0.70,
+          timeframe: '15m–4h (intraday)',
+        });
+      }
+
+      if (isCPI || isNFP || isFOMC) {
+        const pair = toPair(affectedInstruments.find(i => ['BTC', 'ETH', 'USD'].includes(i)) || 'BTC');
+        suggestions.push({
+          direction: 'short',
+          instrument: pair,
+          strategy: `Short risk assets into ${isCPI ? 'hot CPI' : isNFP ? 'strong NFP' : 'hawkish FOMC'} scenario`,
+          rationale: `Hot/hawkish macro data → DXY strength → crypto sell-off 3-5%. Enter short at first rejection candle after release, SL above pre-event high.`,
+          confidence: highImpact ? 0.68 : 0.55,
+          timeframe: '1h–8h',
+        });
+        suggestions.push({
+          direction: 'long',
+          instrument: pair,
+          strategy: `Long the dip — buy the overreaction`,
+          rationale: `Economic news volatility usually overextends. If price drops >3% on release, look for bullish reversal patterns (engulfing, hammer) on 15m chart to long the bounce.`,
+          confidence: highImpact ? 0.65 : 0.50,
+          timeframe: '2h–1d',
+        });
+      }
+
+      if (isGDP && !highImpact) {
+        suggestions.push({
+          direction: 'avoid',
+          instrument: 'BTCUSDT',
+          strategy: 'Reduce leverage ahead of GDP print',
+          rationale: 'GDP surprise can shift macro regime narrative. Close leveraged positions or reduce size 2-4h before release, re-enter after initial reaction settles.',
+          confidence: 0.85,
+          timeframe: 'Pre-event: close; Post-event: re-enter within 4h',
+        });
+      }
+    }
+
+    // ── Crypto-specific events ──
+    if (category === 'crypto') {
+      const isUnlock = title.toLowerCase().includes('unlock');
+      const isHalving = title.toLowerCase().includes('halving');
+      const isUpgrade = title.toLowerCase().includes('upgrade');
+      const isETF = title.toLowerCase().includes('etf');
+
+      if (isUnlock) {
+        suggestions.push({
+          direction: 'short',
+          instrument: toPair(affectedInstruments.find(i => i.includes('ETH') || i.includes('BTC')) || 'ETH'),
+          strategy: 'Short into vesting unlock pressure',
+          rationale: `${title}: Historical unlock events see 15-30% sell-side pressure as early investors de-risk. Short 12-24h before unlock date, target gradual exit over 3-7d post-unlock.`,
+          confidence: medImpact ? 0.72 : 0.60,
+          timeframe: '1d–7d',
+        });
+        suggestions.push({
+          direction: 'long',
+          instrument: toPair(affectedInstruments.find(i => i.includes('stak')) || 'ETH'),
+          strategy: 'Long staking yields post-dip',
+          rationale: 'Unlock-induced dips create entry opportunities for staked positions. If ETH drops >10%, consider DCA into LSD/staking positions at better yields.',
+          confidence: 0.58,
+          timeframe: '3d–14d',
+        });
+      }
+
+      if (isHalving) {
+        suggestions.push({
+          direction: 'long',
+          instrument: 'BTCUSDT',
+          strategy: 'DCA long through halving cycle',
+          rationale: 'Historical pattern: 6-12mo post-halving sees +200-400% appreciation from supply shock. Start scaling in now, accelerate if hash rate holds/miners capitulate then recover.',
+          confidence: 0.75,
+          timeframe: '1mo–12mo (position trade)',
+        });
+        suggestions.push({
+          direction: 'long',
+          instrument: 'BTCUSDT',
+          strategy: 'Long mining stocks via proxy exposure',
+          rationale: 'Halving reduces miner revenue → weak hands exit → hash rate dip → recovery = bullish signal. Consider mining-equivalent exposure for leveraged beta.',
+          confidence: 0.62,
+          timeframe: '3mo–9mo',
+        });
+      }
+
+      if (isUpgrade) {
+        const pair = toPair(affectedInstruments[0] || 'SOL');
+        suggestions.push({
+          direction: 'straddle',
+          instrument: pair,
+          strategy: `Straddle ${affectedInstruments[0] || 'token'} upgrade event`,
+          rationale: `Protocol upgrades are binary: success = pump, failure/crash = dump. Place buy-stop above resistance and sell-stop below support pre-upgrade.`,
+          confidence: medImpact ? 0.70 : 0.55,
+          timeframe: '1h–24h around upgrade time',
+        });
+        suggestions.push({
+          direction: 'long',
+          instrument: pair,
+          strategy: `Long ${affectedInstruments[0] || 'token'} on successful upgrade confirmation`,
+          rationale: 'If upgrade deploys without issues and network metrics (TPS, fees) improve positively, enter long on first pullback with SL below pre-upgrade low.',
+          confidence: 0.60,
+          timeframe: '4h–3d',
+        });
+      }
+
+      if (isETF) {
+        suggestions.push({
+          direction: 'long',
+          instrument: toPair(affectedInstruments.find(i => ['BTC', 'ETH'].includes(i)) || 'BTC'),
+          strategy: 'Long on strong ETF inflow confirmation',
+          rationale: 'Sustained ETF inflows >$500M/week = institutional accumulation. Enter long on weekly flow report if positive, trail stop with 20-day MA.',
+          confidence: 0.73,
+          timeframe: '1d–2w (swing)',
+        });
+        suggestions.push({
+          direction: 'avoid',
+          instrument: 'BTCUSDT',
+          strategy: 'Watch for ETF outflow warning signs',
+          rationale: 'If weekly flows turn negative for 2+ consecutive weeks, reduce crypto exposure. ETF outflows preceded every major drawdown in 2024-2025.',
+          confidence: 0.80,
+          timeframe: 'Monitor weekly reports',
+        });
+      }
+    }
+
+    // ── Regulation events ──
+    if (category === 'regulation') {
+      const isSEC = title.toLowerCase().includes('sec') || title.toLowerCase().includes('etf deadline');
+      const isMiCA = title.toLowerCase().includes('mica');
+      const isJapan = title.toLowerCase().includes('japan') || title.toLowerCase().includes('boj') === false && title.toLowerCase().includes('crypto framework');
+
+      if (isSEC) {
+        const ethPair = 'ETHUSDT';
+        suggestions.push({
+          direction: 'long',
+          instrument: ethPair,
+          strategy: 'Front-run SEC spot ETH ETF approval',
+          rationale: 'If approved, expect +30-50% ETH rally similar to BTC Jan 2024 effect. Build small long position ahead of deadline; size up on approval confirmation.',
+          confidence: 0.55,
+          timeframe: 'Event day + 1-4w post-decision',
+        });
+        suggestions.push({
+          direction: 'straddle',
+          instrument: ethPair,
+          strategy: 'Straddle SEC deadline binary outcome',
+          rationale: 'Binary event: approval = massive pump, rejection = sharp dump. Straddle with wider stops than usual given magnitude of potential move (+/-25%).',
+          confidence: 0.70,
+          timeframe: 'Event day ±3d',
+        });
+        // Also suggest L2 longs
+        suggestions.push({
+          direction: 'long',
+          instrument: 'ARBUSDT', // example L2
+          strategy: 'Long ETH L2 tokens on approval beta play',
+          rationale: 'ETH ETF approval benefits entire ecosystem. L2 tokens (ARB, OP, STRK) tend to outperform ETH on positive regulatory catalysts due to higher beta.',
+          confidence: 0.48,
+          timeframe: '1d–2w',
+        });
+      }
+
+      if (isMiCA) {
+        suggestions.push({
+          direction: 'long',
+          instrument: 'EURCUSDT',
+          strategy: 'Long EUR-backed stablecoins on MiCA compliance demand',
+          rationale: 'MiCA creates compliant EU stablecoin demand. EURC and similar EU-compliant stablecoins may gain market share from USDT in European markets.',
+          confidence: 0.65,
+          timeframe: '2w–3mo',
+        });
+        suggestions.push({
+          direction: 'avoid',
+          instrument: 'USDT',
+          strategy: 'Reduce USDT exposure in EU-regulated context',
+          rationale: 'MiCA non-compliance risk for USDT in EU. If you operate in/with EU counterparties, consider rotating some USDT to MiCA-compliant alternatives.',
+          confidence: 0.75,
+          timeframe: 'Before effective date',
+        });
+      }
+    }
+
+    // ── DeFi protocol events ──
+    if (category === 'defi') {
+      const isGov = title.toLowerCase().includes('governance') || title.toLowerCase().includes('vote');
+      const isFeeSwitch = title.toLowerCase().includes('fee switch');
+
+      if (isGov) {
+        const govToken = toPair(affectedInstruments.find(i => ['AAVE', 'UNI', 'CRV', 'COMP'].some(t => i.includes(t))) || 'AAVE');
+        suggestions.push({
+          direction: 'long',
+          instrument: govToken,
+          strategy: `Long ${govToken} on governance outcome clarity`,
+          rationale: `Governance votes that increase utility (fee switches, higher LTVs, new collateral) are value-accretive for governance tokens. Long on vote pass confirmation.`,
+          confidence: medImpact ? 0.62 : 0.48,
+          timeframe: '4h–3d post-vote',
+        });
+        suggestions.push({
+          direction: 'short',
+          instrument: govToken,
+          strategy: `Short ${govToken} "buy the rumor, sell the news"`,
+          rationale: 'Governance events often front-run the actual vote result. If token pumped >10% leading into vote, consider taking profits/shorting into the event.',
+          confidence: 0.56,
+          timeframe: '1d pre-vote to 1d post-vote',
+        });
+      }
+
+      if (isFeeSwitch) {
+        suggestions.push({
+          direction: 'long',
+          instrument: 'UNIUSDT',
+          strategy: 'Long UNI on fee switch activation narrative',
+          rationale: 'Protocol fee switch = UNI becomes revenue-generating → fundamental re-rate possible. Position small ahead of vote, add on activation.',
+          confidence: 0.52,
+          timeframe: '1d–1w',
+        });
+      }
+    }
+
+    // ── Forex events ──
+    if (category === 'forex') {
+      const isECB = title.toLowerCase().includes('ecb');
+      const isBOJ = title.toLowerCase().includes('boj') || title.toLowerCase().includes('japan');
+
+      if (isECB) {
+        suggestions.push({
+          direction: 'straddle',
+          instrument: 'EUR/USD',
+          strategy: 'Straddle ECB rate decision vs Fed divergence',
+          rationale: 'ECB-Fed policy divergence drives EUR/USD 50-150 pips. If ECB cuts while Fed holds → EUR drops; if ECB holds while Fed cuts → EUR rips. Straddle the announcement.',
+          confidence: 0.76,
+          timeframe: '15m–4h (announcement window)',
+        });
+        suggestions.push({
+          direction: 'long' as const,
+          instrument: 'BTCUSDT',
+          strategy: 'Long BTC on USD weakness from ECB divergence',
+          rationale: 'If ECB holds rates (hawkish) while market expects cut, USD may weaken against EUR → risk-on environment → BTC bid.',
+          confidence: 0.58,
+          timeframe: '4h–2d',
+        });
+      }
+
+      if (isBOJ) {
+        suggestions.push({
+          direction: 'short',
+          instrument: 'USD/JPY',
+          strategy: 'Short USD/JPY on BOJ intervention risk',
+          rationale: 'BOJ verbal/actual intervention can move USD/JPY 200-500 pips in hours. Short position sized for volatility spike; use wide stops or options.',
+          confidence: 0.54,
+          timeframe: '1h–3d',
+        });
+        suggestions.push({
+          direction: 'avoid',
+          instrument: 'JPY-carry-trade-pairs',
+          strategy: 'Unwind JPY carry trades ahead of BOJ event',
+          rationale: 'BOJ intervention = JPY strength = carry trade unwind = global deleveraging. Reduce funded JPY shorts and risk assets funded by cheap JPY borrowing.',
+          confidence: 0.72,
+          timeframe: 'Pre-event: reduce; Post-event: reassess',
+        });
+      }
+    }
+
+    // ── Tech/System events ──
+    if (category === 'tech') {
+      suggestions.push({
+        direction: 'avoid',
+        instrument: toPair(affectedInstruments[0] || 'BTC'),
+        strategy: 'Monitor but don\'t trade on software releases alone',
+        rationale: `${title}: Core software upgrades rarely produce immediate price action unless they introduce breaking changes or critical bugs. Watch for network effects instead.`,
+        confidence: 0.88,
+        timeframe: 'N/A — informational only',
+      });
+    }
+
+    // Deduplicate by instrument+direction (keep highest confidence)
+    const seen = new Set<string>();
+    return suggestions
+      .filter(s => {
+        const key = `${s.instrument}:${s.direction}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, 4); // Max 4 suggestions per event
+  }
+
+  /**
    * Get upcoming scheduled events — economic data releases, protocol events,
    * regulatory deadlines, token unlocks, etc.
    * Events are generated relative to "now" so they're always realistic-looking.
+   * Each event includes auto-generated trade suggestions based on its properties.
    */
   getUpcomingEvents(): UpcomingEvent[] {
     const now = new Date();
@@ -1269,8 +1602,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
       },
     ];
 
-    // Sort by event time (nearest first)
-    return events.sort((a, b) => a.eventAt.getTime() - b.eventAt.getTime());
+    // Sort by event time (nearest first) and attach trade suggestions
+    return events
+      .sort((a, b) => a.eventAt.getTime() - b.eventAt.getTime())
+      .map(event => ({
+        ...event,
+        tradeSuggestions: this.generateTradeSuggestions(event),
+      }));
   }
 
   // ==================== HELPER METHODS ====================
