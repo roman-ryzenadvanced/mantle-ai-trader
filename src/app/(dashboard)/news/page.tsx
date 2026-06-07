@@ -136,6 +136,13 @@ interface TradeSuggestion {
   rationale: string;        // e.g., "Hot CPI = risk-off → BTC drops, then bounces"
   confidence: number;       // 0-1
   timeframe: string;        // e.g., "1h-4h", "1d-3d"
+  execution?: {             // detailed order placement instructions
+    entry: string;
+    stopLoss: string;
+    takeProfit: string;
+    orderType: 'market' | 'limit' | 'oco' | 'stop-market' | 'conditional';
+    positionSize: string;
+  };
 }
 
 interface UpcomingEvent {
@@ -814,6 +821,47 @@ function UpcomingEventCard({ event }: { event: UpcomingEvent }) {
                     </div>
                     <p className="text-[11px] font-medium text-foreground leading-snug">{sig.strategy}</p>
                     <p className="text-[10px] text-muted-foreground leading-relaxed line-clamp-2">{sig.rationale}</p>
+
+                    {/* ── Execution Instructions (inline) ── */}
+                    {sig.execution && (
+                      <div className="mt-1.5 pt-1.5 border-t border-border/30 space-y-1">
+                        <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider text-blue-500/80 font-bold">
+                          <Target className="w-2.5 h-2.5" /> How to Execute
+                        </div>
+
+                        {/* Entry */}
+                        <div className="flex items-start gap-1">
+                          <span className="text-[9px] font-bold text-emerald-600 mt-0.5 shrink-0">ENTRY</span>
+                          <span className="text-[10px] text-foreground leading-snug">{sig.execution.entry}</span>
+                        </div>
+
+                        {/* Stop Loss + Take Profit side by side */}
+                        <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                          <div className="flex items-start gap-1">
+                            <span className="text-[9px] font-bold text-red-500 mt-0.5 shrink-0">SL</span>
+                            <span className="text-[10px] text-red-600/80 leading-snug">{sig.execution.stopLoss}</span>
+                          </div>
+                          <div className="flex items-start gap-1">
+                            <span className="text-[9px] font-bold text-green-500 mt-0.5 shrink-0">TP</span>
+                            <span className="text-[10px] text-green-600/80 leading-snug">{sig.execution.takeProfit}</span>
+                          </div>
+                        </div>
+
+                        {/* Order type + Position size on one line */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-[9px] px-1.5 py-0 rounded font-mono font-medium ${
+                            sig.execution.orderType === 'market' ? 'bg-blue-500/15 text-blue-600' :
+                            sig.execution.orderType === 'limit' ? 'bg-green-500/15 text-green-600' :
+                            sig.execution.orderType === 'oco' ? 'bg-purple-500/15 text-purple-600' :
+                            sig.execution.orderType === 'stop-market' ? 'bg-orange-500/15 text-orange-600' :
+                            'bg-gray-100 text-gray-600'
+                          }`}>
+                            {sig.execution.orderType.toUpperCase()}
+                          </span>
+                          <span className="text-[9px] text-muted-foreground">{sig.execution.positionSize}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Confidence indicator */}

@@ -31,6 +31,14 @@ export interface UpcomingEvent {
   tradeSuggestions?: TradeSuggestion[];
 }
 
+export interface ExecutionInstruction {
+  entry: string;            // e.g., "Market order at candle open after release"
+  stopLoss: string;         // e.g., "1.5% below entry price" or "Above pre-event high"
+  takeProfit: string;       // e.g., "TP1: +2%, TP2: +5%" or "Trail SL after +3%"
+  orderType: 'market' | 'limit' | 'oco' | 'stop-market' | 'conditional';
+  positionSize: string;     // e.g., "2% risk", "0.5x normal size for binary event"
+}
+
 export interface TradeSuggestion {
   direction: 'long' | 'short' | 'straddle' | 'avoid';
   instrument: string;
@@ -38,6 +46,7 @@ export interface TradeSuggestion {
   rationale: string;
   confidence: number;
   timeframe: string;
+  execution?: ExecutionInstruction;   // detailed order placement instructions
 }
 
 // News API configurations
@@ -1107,6 +1116,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: `${title}: Economic releases cause sharp initial moves (2-5%) then often revert. Place OCO orders above/below pre-event range; exit loser, ride winner.`,
           confidence: isFOMC ? 0.78 : isCPI ? 0.82 : isNFP ? 0.75 : 0.70,
           timeframe: '15m–4h (intraday)',
+          execution: {
+            entry: "Place BUY STOP 1.5% above current price + SELL STOP 1.5% below simultaneously",
+            stopLoss: "Winning side: trail to breakeven after +2% move. Losing side: fixed 1% stop",
+            takeProfit: "TP1 at ±3%, TP2 at ±5%. Close 50% at TP1, trail remainder",
+            orderType: "oco",
+            positionSize: "1% risk per side (2% total max)",
+          },
         });
       }
 
@@ -1119,6 +1135,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: `Hot/hawkish macro data → DXY strength → crypto sell-off 3-5%. Enter short at first rejection candle after release, SL above pre-event high.`,
           confidence: highImpact ? 0.68 : 0.55,
           timeframe: '1h–8h',
+          execution: {
+            entry: "Stop-market SHORT at break of first support level after release, OR market short if bearish candle confirms within 15min",
+            stopLoss: "Stop-loss 1.5-2% above entry (above recent swing high)",
+            takeProfit: "TP1: -2% (take 50%), TP2: -4-5% (trail rest)",
+            orderType: "stop-market",
+            positionSize: "2% account risk",
+          },
         });
         suggestions.push({
           direction: 'long',
@@ -1127,6 +1150,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: `Economic news volatility usually overextends. If price drops >3% on release, look for bullish reversal patterns (engulfing, hammer) on 15m chart to long the bounce.`,
           confidence: highImpact ? 0.65 : 0.50,
           timeframe: '2h–1d',
+          execution: {
+            entry: "Limit buy at -2% to -3% from pre-event price (buy the dip), OR market order if bullish engulfing forms on 15m chart",
+            stopLoss: "Stop-loss 1.5-2% below entry (below recent swing low)",
+            takeProfit: "TP1: +2-3% (50%), TP2: +5-7% (trail remainder)",
+            orderType: "limit",
+            positionSize: "2% account risk",
+          },
         });
       }
 
@@ -1138,6 +1168,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: 'GDP surprise can shift macro regime narrative. Close leveraged positions or reduce size 2-4h before release, re-enter after initial reaction settles.',
           confidence: 0.85,
           timeframe: 'Pre-event: close; Post-event: re-enter within 4h',
+          execution: {
+            entry: "No new entries. Conditionally CLOSE existing leveraged positions.",
+            stopLoss: "N/A",
+            takeProfit: "Close 50% of leveraged longs 2h before event, remainder 30min before. Re-enter 2h post-event.",
+            orderType: "conditional",
+            positionSize: "Reduce to 0.5x or flat",
+          },
         });
       }
     }
@@ -1157,6 +1194,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: `${title}: Historical unlock events see 15-30% sell-side pressure as early investors de-risk. Short 12-24h before unlock date, target gradual exit over 3-7d post-unlock.`,
           confidence: medImpact ? 0.72 : 0.60,
           timeframe: '1d–7d',
+          execution: {
+            entry: "Limit short 5-10% below current price (accumulation zone). If event fires, add 50% at market on confirmation candle.",
+            stopLoss: "Initial stop at -15% from entry. Tighten to -8% once event outcome is known.",
+            takeProfit: "TP1: +25% (sell 1/3), TP2: +50% (sell 1/3), remainder trail with weekly highs",
+            orderType: "limit",
+            positionSize: "1.5% risk initially, add 1.5% on confirmation (3% total)",
+          },
         });
         suggestions.push({
           direction: 'long',
@@ -1165,6 +1209,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: 'Unlock-induced dips create entry opportunities for staked positions. If ETH drops >10%, consider DCA into LSD/staking positions at better yields.',
           confidence: 0.58,
           timeframe: '3d–14d',
+          execution: {
+            entry: "Split into 3 limit-buy tranches: 33% at current price, 33% at -5%, 34% at -10%",
+            stopLoss: "Hard stop at -20% from avg entry, or if fundamental thesis invalidates",
+            takeProfit: "No fixed TP — trail stop using 200-day MA or take partial profits at each +50% milestone",
+            orderType: "limit",
+            positionSize: "3-5% total allocated capital, scaled over 2-4 weeks",
+          },
         });
       }
 
@@ -1176,6 +1227,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: 'Historical pattern: 6-12mo post-halving sees +200-400% appreciation from supply shock. Start scaling in now, accelerate if hash rate holds/miners capitulate then recover.',
           confidence: 0.75,
           timeframe: '1mo–12mo (position trade)',
+          execution: {
+            entry: "Split into 3 limit-buy tranches: 33% at current price, 33% at -5%, 34% at -10%",
+            stopLoss: "Hard stop at -20% from avg entry, or if fundamental thesis invalidates",
+            takeProfit: "No fixed TP — trail stop using 200-day MA or take partial profits at each +50% milestone",
+            orderType: "limit",
+            positionSize: "3-5% total allocated capital, scaled over 2-4 weeks",
+          },
         });
         suggestions.push({
           direction: 'long',
@@ -1184,6 +1242,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: 'Halving reduces miner revenue → weak hands exit → hash rate dip → recovery = bullish signal. Consider mining-equivalent exposure for leveraged beta.',
           confidence: 0.62,
           timeframe: '3mo–9mo',
+          execution: {
+            entry: "Split into 3 limit-buy tranches: 33% at current price, 33% at -5%, 34% at -10%",
+            stopLoss: "Hard stop at -20% from avg entry, or if fundamental thesis invalidates",
+            takeProfit: "No fixed TP — trail stop using 200-day MA or take partial profits at each +50% milestone",
+            orderType: "limit",
+            positionSize: "3-5% total allocated capital, scaled over 2-4 weeks",
+          },
         });
       }
 
@@ -1196,6 +1261,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: `Protocol upgrades are binary: success = pump, failure/crash = dump. Place buy-stop above resistance and sell-stop below support pre-upgrade.`,
           confidence: medImpact ? 0.70 : 0.55,
           timeframe: '1h–24h around upgrade time',
+          execution: {
+            entry: "Place BUY STOP 1.5% above current price + SELL STOP 1.5% below simultaneously",
+            stopLoss: "Winning side: trail to breakeven after +2% move. Losing side: fixed 1% stop",
+            takeProfit: "TP1 at ±3%, TP2 at ±5%. Close 50% at TP1, trail remainder",
+            orderType: "oco",
+            positionSize: "1% risk per side (2% total max)",
+          },
         });
         suggestions.push({
           direction: 'long',
@@ -1204,6 +1276,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: 'If upgrade deploys without issues and network metrics (TPS, fees) improve positively, enter long on first pullback with SL below pre-upgrade low.',
           confidence: 0.60,
           timeframe: '4h–3d',
+          execution: {
+            entry: "Limit buy at -2% to -3% from pre-event price (buy the dip), OR market order if bullish engulfing forms on 15m chart",
+            stopLoss: "Stop-loss 1.5-2% below entry (below recent swing low)",
+            takeProfit: "TP1: +2-3% (50%), TP2: +5-7% (trail remainder)",
+            orderType: "limit",
+            positionSize: "2% account risk",
+          },
         });
       }
 
@@ -1215,6 +1294,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: 'Sustained ETF inflows >$500M/week = institutional accumulation. Enter long on weekly flow report if positive, trail stop with 20-day MA.',
           confidence: 0.73,
           timeframe: '1d–2w (swing)',
+          execution: {
+            entry: "Market order long if weekly ETF flow report shows >$500M net positive inflow; otherwise hold",
+            stopLoss: "Stop-loss at -5% below entry or if flows reverse negative for 2 consecutive weeks",
+            takeProfit: "TP1: +5-8% (take 50%), trail remainder with 20-day MA for trend-following exit",
+            orderType: "market",
+            positionSize: "2% account risk, scale up to 3% on sustained multi-week inflows",
+          },
         });
         suggestions.push({
           direction: 'avoid',
@@ -1223,6 +1309,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: 'If weekly flows turn negative for 2+ consecutive weeks, reduce crypto exposure. ETF outflows preceded every major drawdown in 2024-2025.',
           confidence: 0.80,
           timeframe: 'Monitor weekly reports',
+          execution: {
+            entry: "No new entries. Conditionally CLOSE existing leveraged positions.",
+            stopLoss: "N/A",
+            takeProfit: "Close 50% of leveraged longs when 1st negative week confirmed, close remainder on 2nd consecutive negative week",
+            orderType: "conditional",
+            positionSize: "Reduce to 0.5x or flat until flows recover positive",
+          },
         });
       }
     }
@@ -1242,6 +1335,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: 'If approved, expect +30-50% ETH rally similar to BTC Jan 2024 effect. Build small long position ahead of deadline; size up on approval confirmation.',
           confidence: 0.55,
           timeframe: 'Event day + 1-4w post-decision',
+          execution: {
+            entry: "Limit long 5-10% below current price (accumulation zone). If event fires, add 50% at market on confirmation candle.",
+            stopLoss: "Initial stop at -15% from entry. Tighten to -8% once event outcome is known.",
+            takeProfit: "TP1: +25% (sell 1/3), TP2: +50% (sell 1/3), remainder trail with weekly highs",
+            orderType: "limit",
+            positionSize: "1.5% risk initially, add 1.5% on confirmation (3% total)",
+          },
         });
         suggestions.push({
           direction: 'straddle',
@@ -1250,6 +1350,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: 'Binary event: approval = massive pump, rejection = sharp dump. Straddle with wider stops than usual given magnitude of potential move (+/-25%).',
           confidence: 0.70,
           timeframe: 'Event day ±3d',
+          execution: {
+            entry: "Place BUY STOP 1.5% above current price + SELL STOP 1.5% below simultaneously",
+            stopLoss: "Winning side: trail to breakeven after +2% move. Losing side: fixed 1% stop",
+            takeProfit: "TP1 at ±3%, TP2 at ±5%. Close 50% at TP1, trail remainder",
+            orderType: "oco",
+            positionSize: "1% risk per side (2% total max)",
+          },
         });
         // Also suggest L2 longs
         suggestions.push({
@@ -1259,6 +1366,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: 'ETH ETF approval benefits entire ecosystem. L2 tokens (ARB, OP, STRK) tend to outperform ETH on positive regulatory catalysts due to higher beta.',
           confidence: 0.48,
           timeframe: '1d–2w',
+          execution: {
+            entry: "Limit long 5-10% below current price (accumulation zone). If event fires, add 50% at market on confirmation candle.",
+            stopLoss: "Initial stop at -15% from entry. Tighten to -8% once event outcome is known.",
+            takeProfit: "TP1: +25% (sell 1/3), TP2: +50% (sell 1/3), remainder trail with weekly highs",
+            orderType: "limit",
+            positionSize: "1.5% risk initially, add 1.5% on confirmation (3% total)",
+          },
         });
       }
 
@@ -1270,6 +1384,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: 'MiCA creates compliant EU stablecoin demand. EURC and similar EU-compliant stablecoins may gain market share from USDT in European markets.',
           confidence: 0.65,
           timeframe: '2w–3mo',
+          execution: {
+            entry: "Split into 3 limit-buy tranches: 33% at current price, 33% at -5%, 34% at -10%",
+            stopLoss: "Hard stop at -20% from avg entry, or if fundamental thesis invalidates",
+            takeProfit: "No fixed TP — trail stop using 200-day MA or take partial profits at each +50% milestone",
+            orderType: "limit",
+            positionSize: "3-5% total allocated capital, scaled over 2-4 weeks",
+          },
         });
         suggestions.push({
           direction: 'avoid',
@@ -1278,6 +1399,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: 'MiCA non-compliance risk for USDT in EU. If you operate in/with EU counterparties, consider rotating some USDT to MiCA-compliant alternatives.',
           confidence: 0.75,
           timeframe: 'Before effective date',
+          execution: {
+            entry: "No new entries. Conditionally CLOSE existing leveraged positions.",
+            stopLoss: "N/A",
+            takeProfit: "Gradually reduce USDT exposure by 50% before effective date, remainder rotate to compliant alternatives",
+            orderType: "conditional",
+            positionSize: "Reduce to 0.5x or flat",
+          },
         });
       }
     }
@@ -1296,6 +1424,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: `Governance votes that increase utility (fee switches, higher LTVs, new collateral) are value-accretive for governance tokens. Long on vote pass confirmation.`,
           confidence: medImpact ? 0.62 : 0.48,
           timeframe: '4h–3d post-vote',
+          execution: {
+            entry: "Market order long immediately on vote-pass confirmation candle; do not front-run before result is final",
+            stopLoss: "Stop-loss 1.5-2% below entry (below recent swing low)",
+            takeProfit: "TP1: +2-3% (50%), TP2: +5-7% (trail remainder)",
+            orderType: "market",
+            positionSize: "2% account risk",
+          },
         });
         suggestions.push({
           direction: 'short',
@@ -1304,6 +1439,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: 'Governance events often front-run the actual vote result. If token pumped >10% leading into vote, consider taking profits/shorting into the event.',
           confidence: 0.56,
           timeframe: '1d pre-vote to 1d post-vote',
+          execution: {
+            entry: "Limit short at current price 12-24h before vote if token has pumped >10%; OR stop-market short on rejection confirmation",
+            stopLoss: "Stop-loss 1.5-2% above entry (above recent swing high)",
+            takeProfit: "TP1: -2% (take 50%), TP2: -4-5% (trail rest)",
+            orderType: "limit",
+            positionSize: "2% account risk",
+          },
         });
       }
 
@@ -1315,6 +1457,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: 'Protocol fee switch = UNI becomes revenue-generating → fundamental re-rate possible. Position small ahead of vote, add on activation.',
           confidence: 0.52,
           timeframe: '1d–1w',
+          execution: {
+            entry: "Market order long immediately on fee-switch activation confirmation; small limit long ahead of vote as initial position",
+            stopLoss: "Stop-loss at -5% below entry or if vote fails/rejected",
+            takeProfit: "TP1: +5% (take 50%), TP2: +10-15% (trail remainder with 20-day MA)",
+            orderType: "market",
+            positionSize: "1.5% risk initially, add 1% on activation (2.5% total)",
+          },
         });
       }
     }
@@ -1332,6 +1481,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: 'ECB-Fed policy divergence drives EUR/USD 50-150 pips. If ECB cuts while Fed holds → EUR drops; if ECB holds while Fed cuts → EUR rips. Straddle the announcement.',
           confidence: 0.76,
           timeframe: '15m–4h (announcement window)',
+          execution: {
+            entry: "Place BUY STOP 1.5% above current price + SELL STOP 1.5% below simultaneously",
+            stopLoss: "Winning side: trail to breakeven after +2% move. Losing side: fixed 1% stop",
+            takeProfit: "TP1 at ±3%, TP2 at ±5%. Close 50% at TP1, trail remainder",
+            orderType: "oco",
+            positionSize: "1% risk per side (2% total max)",
+          },
         });
         suggestions.push({
           direction: 'long' as const,
@@ -1340,6 +1496,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: 'If ECB holds rates (hawkish) while market expects cut, USD may weaken against EUR → risk-on environment → BTC bid.',
           confidence: 0.58,
           timeframe: '4h–2d',
+          execution: {
+            entry: "Limit buy at -2% to -3% from pre-event price (buy the dip), OR market order if bullish engulfing forms on 15m chart",
+            stopLoss: "Stop-loss 1.5-2% below entry (below recent swing low)",
+            takeProfit: "TP1: +2-3% (50%), TP2: +5-7% (trail remainder)",
+            orderType: "limit",
+            positionSize: "2% account risk",
+          },
         });
       }
 
@@ -1351,6 +1514,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: 'BOJ verbal/actual intervention can move USD/JPY 200-500 pips in hours. Short position sized for volatility spike; use wide stops or options.',
           confidence: 0.54,
           timeframe: '1h–3d',
+          execution: {
+            entry: "Stop-market SHORT at break of first support level after release, OR market short if bearish candle confirms within 15min",
+            stopLoss: "Stop-loss 1.5-2% above entry (above recent swing high). Use wider stops given intervention volatility.",
+            takeProfit: "TP1: -100 pips (take 50%), TP2: -250+ pips (trail rest)",
+            orderType: "stop-market",
+            positionSize: "2% account risk",
+          },
         });
         suggestions.push({
           direction: 'avoid',
@@ -1359,6 +1529,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           rationale: 'BOJ intervention = JPY strength = carry trade unwind = global deleveraging. Reduce funded JPY shorts and risk assets funded by cheap JPY borrowing.',
           confidence: 0.72,
           timeframe: 'Pre-event: reduce; Post-event: reassess',
+          execution: {
+            entry: "No new entries. Conditionally CLOSE existing leveraged positions.",
+            stopLoss: "N/A",
+            takeProfit: "Close all JPY-funded carry positions 24h before event; re-assess 4h post-intervention signal",
+            orderType: "conditional",
+            positionSize: "Reduce to flat on carry trade exposure",
+          },
         });
       }
     }
@@ -1372,6 +1549,13 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
         rationale: `${title}: Core software upgrades rarely produce immediate price action unless they introduce breaking changes or critical bugs. Watch for network effects instead.`,
         confidence: 0.88,
         timeframe: 'N/A — informational only',
+        execution: {
+          entry: "No new entries. Conditionally CLOSE existing leveraged positions.",
+          stopLoss: "N/A",
+          takeProfit: "No action required. Software upgrades are informational — do not adjust positions based on release alone.",
+          orderType: "conditional",
+          positionSize: "Hold current size — no new positions",
+        },
       });
     }
 
