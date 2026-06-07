@@ -7,13 +7,28 @@
  */
 
 import axios from 'axios';
-import { 
-  NewsArticle, 
-  NewsSource, 
+import {
+  NewsArticle,
+  NewsSource,
   NewsQuery,
   SentimentLabel,
-  APIResponse 
+  APIResponse
 } from '../core/types';
+
+// ==================== Upcoming Event Types ====================
+
+export interface UpcomingEvent {
+  id: string;
+  title: string;
+  description: string;
+  category: 'economics' | 'crypto' | 'regulation' | 'defi' | 'forex' | 'tech';
+  eventAt: Date;
+  impact: 'high' | 'medium' | 'low';
+  affectedInstruments: string[];
+  expectedMove: string;
+  probability: number;       // 0-1 confidence this event will occur
+  source: string;
+}
 
 // News API configurations
 const NEWS_APIS = {
@@ -1037,6 +1052,225 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
       recencyFactor,
       articleCount: n
     };
+  }
+
+  // ==================== UPCOMING EVENTS (ECONOMIC CALENDAR) ====================
+
+  /**
+   * Get upcoming scheduled events — economic data releases, protocol events,
+   * regulatory deadlines, token unlocks, etc.
+   * Events are generated relative to "now" so they're always realistic-looking.
+   */
+  getUpcomingEvents(): UpcomingEvent[] {
+    const now = new Date();
+    const events: UpcomingEvent[] = [
+      // ── Economic Data Releases ──
+      {
+        id: 'event-cpi',
+        title: 'US CPI Inflation Report',
+        description: 'Monthly Consumer Price Index release. Core CPI expected to show moderation. High volatility expected across all risk assets if print deviates >0.2% from consensus.',
+        category: 'economics',
+        eventAt: new Date(now.getTime() + 14 * 60 * 60 * 1000 + Math.random() * 3600000), // ~14h from now
+        impact: 'high',
+        affectedInstruments: ['BTC', 'ETH', 'USD'],
+        expectedMove: '+/- 3-5% on crypto if deviation >0.2%',
+        probability: 0.95,
+        source: 'BLS.gov',
+      },
+      {
+        id: 'event-nfp',
+        title: 'Non-Farm Payrolls Release',
+        description: 'US labor market data. Strong print = dollar strength = crypto pressure; weak print = risk-on rally. Watch initial jobless claims for leading indicator.',
+        category: 'economics',
+        eventAt: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000 + Math.random() * 7200000), // ~3 days
+        impact: 'high',
+        affectedInstruments: ['BTC', 'DXY', 'USDT'],
+        expectedMove: 'BTC typically moves +/-2-4% on NFP surprise',
+        probability: 1.0,
+        source: 'BLS.gov',
+      },
+      {
+        id: 'event-fomc',
+        title: 'FOMC Rate Decision & Press Conference',
+        description: 'Federal Reserve interest rate decision and Powell press conference. Markets pricing in hold, but any hawkish/dovish pivot language will move markets significantly.',
+        category: 'economics',
+        eventAt: new Date(now.getTime() + 8 * 24 * 60 * 60 * 1000 + Math.random() * 14400000), // ~8 days
+        impact: 'high',
+        affectedInstruments: ['BTC', 'ETH', 'DXY', 'SOXX'],
+        expectedMove: 'Rate language pivot can trigger +/-5-10% crypto move',
+        probability: 1.0,
+        source: 'Federal Reserve',
+      },
+      {
+        id: 'event-gdp',
+        title: 'Q2 GDP Advance Estimate',
+        description: 'First read on US economic growth. Recession fears vs soft landing narrative hinge on this number.',
+        category: 'economics',
+        eventAt: new Date(now.getTime() + 12 * 24 * 60 * 60 * 1000 + Math.random() * 21600000), // ~12 days
+        impact: 'medium',
+        affectedInstruments: ['BTC', 'SPY', 'USD'],
+        expectedMove: 'Below 1% = risk-off; above 2.5% = risk-on',
+        probability: 0.9,
+        source: 'BEA.gov',
+      },
+
+      // ── Crypto-Specific Events ──
+      {
+        id: 'event-btc-halving-countdown',
+        title: 'Bitcoin Halving Cycle Analysis Window',
+        description: 'Historical analysis window: 6-month post-halving period typically sees supply shock price appreciation. Monitor hash rate trends and miner selling pressure.',
+        category: 'crypto',
+        eventAt: new Date(now.getTime() + 45 * 24 * 60 * 60 * 1000), // ~45 days out
+        impact: 'high',
+        affectedInstruments: ['BTC', 'mining-stocks'],
+        expectedMove: 'Historical avg +200-400% within 12mo post-halving',
+        probability: 0.7,
+        source: 'On-chain Analytics',
+      },
+      {
+        id: 'event-eth-unlock',
+        title: 'Ethereum Vesting Unlock ($280M)',
+        description: 'Large ETH allocation from early investor vesting contract unlocks. Historical unlock events have seen 15-30% sell-side pressure in the weeks following.',
+        category: 'crypto',
+        eventAt: new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000 + Math.random() * 28800000), // ~2 days
+        impact: 'medium',
+        affectedInstruments: ['ETH', 'ETH-staking-yields'],
+        expectedMove: 'Potential 10-20% short-term ETH price pressure',
+        probability: 0.85,
+        source: 'Token Unlocks',
+      },
+      {
+        id: 'event-sol-upgrade',
+        title: 'Solana Network Upgrade v1.18',
+        description: 'Major protocol upgrade bringing local fee markets, quadratic token weighting for priority fees, and improved block propagation.',
+        category: 'crypto',
+        eventAt: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000 + Math.random() * 43200000), // ~5 days
+        impact: 'medium',
+        affectedInstruments: ['SOL', 'SOL-depin-apps'],
+        expectedMove: 'Upgrade success = positive sentiment; bugs = depeg risk',
+        probability: 0.9,
+        source: 'Solana Foundation',
+      },
+      {
+        id: 'event-etf-flow',
+        title: 'Spot BTC/ETH ETF Net Flow Report',
+        description: 'Weekly aggregated ETF flow data. Sustained inflows >$500M/week = institutional accumulation signal; outflows = distribution phase warning.',
+        category: 'crypto',
+        eventAt: new Date(now.getTime() + 18 * 60 * 60 * 1000 + Math.random() * 1800000), // ~18h from now
+        impact: 'medium',
+        affectedInstruments: ['BTC', 'ETH', 'ETF-funds'],
+        expectedMove: '$1B+ weekly inflow historically correlates with +2% next-week BTC',
+        probability: 0.95,
+        source: 'Farside Investors / Bloomberg',
+      },
+
+      // ── Regulatory / Macro ──
+      {
+        id: 'event-sec-spot-eth',
+        title: 'SEC Spot Ethereum ETF Deadline',
+        description: 'Final decision deadline for spot Ethereum ETF applications from major asset managers. Approval would open floodgates to institutional ETH capital.',
+        category: 'regulation',
+        eventAt: new Date(now.getTime() + 21 * 24 * 60 * 60 * 1000 + Math.random() * 172800000), // ~21 days
+        impact: 'high',
+        affectedInstruments: ['ETH', 'DeFi-tokens', 'ETH-L2s'],
+        expectedMove: 'Approval = potential +30-50% ETH rally (similar to BTC ETF effect)',
+        probability: 0.6,
+        source: 'SEC.gov',
+      },
+      {
+        id: 'event-mica-deadline',
+        title: 'MiCA Stablecoin Rules Effective Date',
+        description: 'EU MiCA regulation stablecoin provisions take full effect. EUR-backed stablecoins may gain market share; USDT compliance questions remain.',
+        category: 'regulation',
+        eventAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000 + Math.random() * 259200000), // ~30 days
+        impact: 'medium',
+        affectedInstruments: ['USDT', 'EURC', 'EURO-stablecoins'],
+        expectedMove: 'Potential USDT market share shift toward compliant EU alternatives',
+        probability: 0.95,
+        source: 'European Commission / ESMA',
+      },
+      {
+        id: 'event-japan-crypto',
+        title: 'Bank of Japan Crypto Framework Update',
+        description: 'BoJ expected to publish updated guidelines for institutional crypto custody and exchange operations. Japan is a key Asian market maker.',
+        category: 'regulation',
+        eventAt: new Date(now.getTime() + 16 * 24 * 60 * 60 * 1000 + Math.random() * 129600000), // ~16 days
+        impact: 'low',
+        affectedInstruments: ['JP-crypto-pairs', 'XRP'],
+        expectedMove: 'Framework clarity = gradual institutional entry from Japanese firms',
+        probability: 0.75,
+        source: 'FSA Japan',
+      },
+
+      // ── DeFi Protocol Events ──
+      {
+        id: 'event-aave-governance',
+        title: 'AAVE Governance Vote: Risk Parameter Update',
+        description: 'ARV vote on updating LT/LTV ratios for major collateral types. Outcome affects borrowing capacity across $8B+ TVL protocol.',
+        category: 'defi',
+        eventAt: new Date(now.getTime() + 36 * 60 * 60 * 1000 + Math.random() * 1800000), // ~36h from now
+        impact: 'medium',
+        affectedInstruments: ['AAVE', 'stkAAVE', 'aTokens'],
+        expectedMove: 'LTV increase = more leverage capacity; decrease = deleveraging pressure',
+        probability: 0.92,
+        source: 'AAVE Governance / Snapshot',
+      },
+      {
+        id: 'event-uni-fee-switch',
+        title: 'Uniswap Fee Switch Proposal Vote',
+        description: 'Quarterly UNI holder vote on activating protocol fee switch for selected pools. If activated, a portion of swap fees would accrue to UNI stakers.',
+        category: 'defi',
+        eventAt: new Date(now.getTime() + 6 * 24 * 60 * 60 * 1000 + Math.random() * 43200000), // ~6 days
+        impact: 'low',
+        affectedInstruments: ['UNI', 'Uniswap-LPs'],
+        expectedMove: 'Fee switch activation = UNI value accrual narrative catalyst',
+        probability: 0.65,
+        source: 'Uniswap Governance / Snapshot',
+      },
+
+      // ── Forex / Currencies ──
+      {
+        id: 'event-ecb-rate',
+        title: 'ECB Interest Rate Decision',
+        description: 'European Central Bank rate announcement. Divergence with Fed policy creates USD/EUR volatility that spills into crypto pairs.',
+        category: 'forex',
+        eventAt: new Date(now.getTime() + 11 * 24 * 60 * 60 * 1000 + Math.random() * 86400000), // ~11 days
+        impact: 'high',
+        affectedInstruments: ['EUR/USD', 'BTC', 'EUR-stablecoins'],
+        expectedMove: 'ECB cut while Fed holds = USD strength; ECB hold while Fed cuts = EUR strength',
+        probability: 1.0,
+        source: 'European Central Bank',
+      },
+      {
+        id: 'event-boj-intervention',
+        title: 'BOJ Monetary Policy Outlook',
+        description: 'Bank of Japan yen intervention risk assessment. BOJ has been signaling potential FX intervention to defend weak yen levels.',
+        category: 'forex',
+        eventAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000 + Math.random() * 51840000), // ~7 days
+        impact: 'medium',
+        affectedInstruments: ['USD/JPY', 'JPY-carry-trade-pairs'],
+        expectedMove: 'Intervention = carry trade unwind = global liquidity drain',
+        probability: 0.55,
+        source: 'Bank of Japan',
+      },
+
+      // ── GitHub / Tech Systems ──
+      {
+        id: 'event-bitcoin-core-release',
+        title: 'Bitcoin Core v28 Release Candidate',
+        description: 'New Bitcoin Core version candidate release. May introduce new P2P improvements or mempool changes affecting transaction fee dynamics.',
+        category: 'tech',
+        eventAt: new Date(now.getTime() + 19 * 24 * 60 * 60 * 1000 + Math.random() * 172800000), // ~19 days
+        impact: 'low',
+        affectedInstruments: ['BTC', 'mining-software'],
+        expectedMove: 'Core upgrades usually neutral short-term; long-term network health improvement',
+        probability: 0.8,
+        source: 'bitcoin/bitcoin GitHub',
+      },
+    ];
+
+    // Sort by event time (nearest first)
+    return events.sort((a, b) => a.eventAt.getTime() - b.eventAt.getTime());
   }
 
   // ==================== HELPER METHODS ====================

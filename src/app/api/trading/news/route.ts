@@ -133,15 +133,16 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       data: paginatedNews,
       pagination: {
         page,
         limit,
         total,
         hasMore: offset + limit < total
-      }
+      },
+      upcomingEvents: newsAggregator.getUpcomingEvents(),
     });
   } catch (error) {
     console.error('Error fetching news:', error);

@@ -8,7 +8,8 @@ import {
   Newspaper, RefreshCw, ExternalLink, AlertTriangle,
   Github, GitPullRequest, GitCommit, Star,
   TrendingUp, TrendingDown, Minus, Package, MessageSquare,
-  Activity, BarChart3, Clock, ArrowRight, Zap, Filter
+  Activity, BarChart3, Clock, ArrowRight, Zap, Filter,
+  CalendarDays, Timer, Target, Info, Sparkles
 } from 'lucide-react';
 import { DEFAULT_CRYPTO_REPOS, REPO_CATEGORIES, CATEGORY_LABELS, type RepoCategory } from '@/lib/trading/github-activity';
 import { toast } from 'sonner';
@@ -125,6 +126,21 @@ interface MarketIntelligence {
 
 type Tab = 'news' | 'github';
 type CategoryFilter = RepoCategory | 'all';
+
+// ── Upcoming Event (from backend) ──
+
+interface UpcomingEvent {
+  id: string;
+  title: string;
+  description: string;
+  category: 'economics' | 'crypto' | 'regulation' | 'defi' | 'forex' | 'tech';
+  eventAt: string;          // ISO date string (future)
+  impact: 'high' | 'medium' | 'low';
+  affectedInstruments: string[];
+  expectedMove: string;
+  probability: number;
+  source: string;
+}
 
 // ==================== Helpers ====================
 
@@ -612,12 +628,196 @@ function RecentReleasesList({
   );
 }
 
+// ==================== Countdown Timer (live updating) ====================
+
+function CountdownTimer({ targetDate, className }: { targetDate: string; className?: string }) {
+  const [text, setText] = useState<string>('--');
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!targetDate) { setText('--'); return; }
+    const d = new Date(targetDate);
+    if (isNaN(d.getTime())) { setText('invalid'); return; }
+
+    const tick = () => {
+      const diff = d.getTime() - Date.now();
+      if (diff <= 0) { setText('NOW'); if (intervalRef.current) clearInterval(intervalRef.current); return; }
+
+      const days = Math.floor(diff / 86400000);
+      const hours = Math.floor((diff % 86400000) / 3600000);
+      const mins = Math.floor((diff % 3600000) / 60000);
+      const secs = Math.floor((diff % 60000) / 1000);
+
+      if (days > 0) setText(`${days}d ${hours}h ${mins}m`);
+      else if (hours > 0) setText(`${hours}h ${mins}m ${secs}s`);
+      else setText(`${mins}m ${secs}s`);
+    };
+
+    tick();
+    // Compute initial diff for rate selection
+    const initialDiff = d.getTime() - Date.now();
+    const rate = initialDiff > 86400000 ? 60000 : initialDiff > 3600000 ? 10000 : 1000;
+    intervalRef.current = setInterval(tick, rate);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [targetDate]);
+
+  const isUrgent = (() => {
+    if (!targetDate || text === 'NOW' || text === '--') return false;
+    const d = new Date(targetDate);
+    return !isNaN(d.getTime()) && (d.getTime() - Date.now()) <= 3600000;
+  })();
+
+  return (
+    <span className={`inline-flex items-center gap-1 font-mono font-semibold tabular-nums ${className || ''} ${
+      isUrgent ? 'text-red-600 animate-pulse' : 'text-blue-600'
+    }`}>
+      <Timer className="w-3.5 h-3.5" />
+      {text}
+    </span>
+  );
+}
+
+// ==================== Category Icon + Color for Events ====================
+
+const EVENT_CATEGORY_CONFIG: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
+  economics:   { icon: <BarChart3 className="w-4 h-4" />, color: 'bg-amber-500/15 text-amber-700 border-amber-500/30', label: 'Economics' },
+  crypto:      { icon: <Sparkles className="w-4 h-4" />, color: 'bg-orange-500/15 text-orange-600 border-orange-500/30', label: 'Crypto' },
+  regulation:  { icon: <AlertTriangle className="w-4 h-4" />, color: 'bg-red-500/15 text-red-600 border-red-500/30', label: 'Regulation' },
+  defi:        { icon: <Package className="w-4 h-4" />, color: 'bg-purple-500/15 text-purple-600 border-purple-500/30', label: 'DeFi' },
+  forex:       { icon: <TrendingUp className="w-4 h-4" />, color: 'bg-green-500/15 text-green-600 border-green-500/30', label: 'Forex/FX' },
+  tech:        { icon: <Github className="w-4 h-4" />, color: 'bg-cyan-500/15 text-cyan-600 border-cyan-500/30', label: 'Tech/System' },
+};
+
+function impactConfig(impact: string): { color: string; label: string } {
+  switch (impact) {
+    case 'high':   return { color: 'bg-red-500/15 text-red-600 border-red-500/30', label: 'High Impact' };
+    case 'medium': return { color: 'bg-yellow-500/15 text-yellow-700 border-yellow-500/30', label: 'Medium' };
+    default:       return { color: 'bg-muted text-muted-foreground border-border', label: 'Low' };
+  }
+}
+
+// ==================== Upcoming Event Card ====================
+
+function UpcomingEventCard({ event }: { event: UpcomingEvent }) {
+  const [expanded, setExpanded] = useState(false);
+  const cat = EVENT_CATEGORY_CONFIG[event.category] || EVENT_CATEGORY_CONFIG.tech;
+  const imp = impactConfig(event.impact);
+
+  return (
+    <div
+      className={`bg-card border rounded-xl p-4 space-y-3 transition-all hover:bg-accent/30 cursor-pointer ${
+        event.impact === 'high' ? 'border-l-4 border-l-red-400' : 'border-border'
+      }`}
+      onClick={() => setExpanded(!expanded)}
+    >
+      {/* Header row */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md border font-medium ${cat.color}`}>
+            {cat.icon}
+            {cat.label}
+          </span>
+          <h4 className="font-semibold text-sm text-foreground leading-snug line-clamp-2">{event.title}</h4>
+        </div>
+        {/* Impact badge + countdown */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${imp.color}`}>
+            {event.impact === 'high' && <Zap className="w-3 h-3 mr-0.5" />}
+            {imp.label}
+          </Badge>
+          <CountdownTimer targetDate={event.eventAt} className="text-[11px]" />
+        </div>
+      </div>
+
+      {/* Expected move — always visible */}
+      <div className="flex items-center gap-1.5 text-xs">
+        <Target className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+        <span className="font-medium text-foreground">Expected:</span>
+        <span className="text-muted-foreground">{event.expectedMove}</span>
+        <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+          {(event.probability * 100).toFixed(0)}% likely
+        </span>
+      </div>
+
+      {/* Affected instruments */}
+      <div className="flex flex-wrap gap-1">
+        {event.affectedInstruments.map(inst => (
+          <span key={inst} className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 font-medium border border-blue-500/20">
+            {inst}
+          </span>
+        ))}
+      </div>
+
+      {/* Expanded explanation */}
+      {expanded && (
+        <div className="pt-2 border-t border-border/50 space-y-2">
+          <p className="text-xs text-muted-foreground leading-relaxed">{event.description}</p>
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            <Info className="w-3 h-3" />
+            Source: {event.source}
+          </div>
+        </div>
+      )}
+
+      {/* Click-to-expand hint */}
+      {!expanded && (
+        <p className="text-[10px] text-muted-foreground italic">Click to see full analysis</p>
+      )}
+    </div>
+  );
+}
+
+// ==================== Upcoming Events Section ====================
+
+function UpcomingEventsSection({ events }: { events: UpcomingEvent[] }) {
+  if (!events.length) return null;
+
+  // Split into urgent (<24h), soon (24h-7d), upcoming (>7d)
+  const now = Date.now();
+  const urgent = events.filter(e => new Date(e.eventAt).getTime() - now <= 86400000);
+  const soon = events.filter(e => {
+    const d = new Date(e.eventAt).getTime() - now;
+    return d > 86400000 && d <= 604800000;
+  });
+  const later = events.filter(e => new Date(e.eventAt).getTime() - now > 604800000);
+
+  const renderGroup = (label: string, evts: UpcomingEvent[], showCalendarIcon?: boolean) => (
+    <div key={label} className="space-y-3">
+      <div className="flex items-center gap-2">
+        {showCalendarIcon !== false && <CalendarDays className="w-4 h-4 text-blue-500" />}
+        <h3 className="font-semibold text-sm text-foreground">{label}</h3>
+        <Badge variant="outline" className="text-[10px] ml-auto">{evts.length} events</Badge>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {evts.map(e => <UpcomingEventCard key={e.id} event={e} />)}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="bg-card border border-blue-300/50 rounded-xl p-5 space-y-6">
+      <div className="flex items-center gap-2">
+        <CalendarDays className="w-5 h-5 text-blue-600" />
+        <h2 className="font-bold text-lg text-foreground">Upcoming Events & Economic Calendar</h2>
+        <Badge variant="outline" className="text-blue-600 border-blue-500/30 text-xs ml-auto">
+          {events.length} scheduled
+        </Badge>
+      </div>
+
+      {urgent.length > 0 && renderGroup('Happening Soon (within 24h)', urgent)}
+      {soon.length > 0 && renderGroup('This Week', soon)}
+      {later.length > 0 && renderGroup('Coming Up', later)}
+    </div>
+  );
+}
+
 // ==================== Main Page Component ====================
 
 export default function NewsPage() {
   // State
   const [activeTab, setActiveTab] = useState<Tab>('news');
   const [news, setNews] = useState<NewsArticle[]>([]);
+  const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([]);
   const [loadingNews, setLoadingNews] = useState(true);
   const [githubData, setGithubData] = useState<{
     summaries: GitHubActivitySummary[];
@@ -633,6 +833,7 @@ export default function NewsPage() {
       if (res.ok) {
         const data = await res.json();
         setNews(data.data || []);
+        setUpcomingEvents(data.upcomingEvents || []);
       }
     } catch {
       toast.error('Failed to fetch news');
@@ -710,7 +911,13 @@ export default function NewsPage() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <>
+              {/* Upcoming Events Calendar (above news feed) */}
+              {upcomingEvents.length > 0 && (
+                <UpcomingEventsSection events={upcomingEvents} />
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {news.map((article) => {
                 const isBreaking = (article.importance || 0) >= 0.8;
                 const sentiment = sentimentLabel(article.sentiment);
@@ -807,6 +1014,7 @@ export default function NewsPage() {
                 );
               })}
             </div>
+            </>
           )}
         </>
       )}
