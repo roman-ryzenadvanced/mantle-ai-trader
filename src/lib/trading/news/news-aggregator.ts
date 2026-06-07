@@ -32,11 +32,14 @@ export interface UpcomingEvent {
 }
 
 export interface ExecutionInstruction {
+  when: string;             // e.g., "2h before CPI release", "At FOMC announcement moment", "After first 15m candle post-release"
+  where: string;            // e.g., "Binance Futures (BTCUSDT Perp)", "Bybit (ETHUSDT)", "OKX Spot"
   entry: string;            // e.g., "Market order at candle open after release"
   stopLoss: string;         // e.g., "1.5% below entry price" or "Above pre-event high"
   takeProfit: string;       // e.g., "TP1: +2%, TP2: +5%" or "Trail SL after +3%"
   orderType: 'market' | 'limit' | 'oco' | 'stop-market' | 'conditional';
   positionSize: string;     // e.g., "2% risk", "0.5x normal size for binary event"
+  steps?: string[];         // e.g., ["Set alert for release time", "Mark support/resistance levels", ...]
 }
 
 export interface TradeSuggestion {
@@ -1117,11 +1120,20 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: isFOMC ? 0.78 : isCPI ? 0.82 : isNFP ? 0.75 : 0.70,
           timeframe: '15m–4h (intraday)',
           execution: {
+            when: "Set orders 30-60min BEFORE the release time. Both stops must be live before data drops.",
+            where: "Binance Futures (BTCUSDT Perpetual)",
             entry: "Place BUY STOP 1.5% above current price + SELL STOP 1.5% below simultaneously",
             stopLoss: "Winning side: trail to breakeven after +2% move. Losing side: fixed 1% stop",
             takeProfit: "TP1 at ±3%, TP2 at ±5%. Close 50% at TP1, trail remainder",
             orderType: "oco",
             positionSize: "1% risk per side (2% total max)",
+            steps: [
+              "Mark your calendar: Economic data release time (CPI/NFP/FOMC/GDP)",
+              "Identify BTC support/resistance levels 1h before release",
+              "Set price alerts ±2% from current price",
+              "Place both BUY STOP and SELL STOP orders in your order book 30min before",
+              "Cancel losing side within 5min of fill, trail winner with breakeven stop",
+            ],
           },
         });
       }
@@ -1136,11 +1148,20 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: highImpact ? 0.68 : 0.55,
           timeframe: '1h–8h',
           execution: {
+            when: "Enter SHORT within first 2 candles (15-30min) after release IF bearish candle confirms",
+            where: "Bybit (ETHUSDT USDT Perpetual)",
             entry: "Stop-market SHORT at break of first support level after release, OR market short if bearish candle confirms within 15min",
             stopLoss: "Stop-loss 1.5-2% above entry (above recent swing high)",
             takeProfit: "TP1: -2% (take 50%), TP2: -4-5% (trail rest)",
             orderType: "stop-market",
             positionSize: "2% account risk",
+            steps: [
+              "Watch for the data release live (Bloomberg terminal / TradingView economic calendar)",
+              "Wait for first 15m candle to close after release — look for bearish rejection wick",
+              "Confirm bearish momentum: volume spike + lower low on 15m chart",
+              "Enter stop-market SHORT at break of nearest support level",
+              "Take 50% profit at -2%, trail remainder with 20 EMA on 1h chart",
+            ],
           },
         });
         suggestions.push({
@@ -1151,11 +1172,20 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: highImpact ? 0.65 : 0.50,
           timeframe: '2h–1d',
           execution: {
+            when: "Wait for initial volatility spike to settle (15-30min post-release), then look for +2-3% dip from pre-release level",
+            where: "OKX (BTCUSDT-SWAP Perpetual)",
             entry: "Limit buy at -2% to -3% from pre-event price (buy the dip), OR market order if bullish engulfing forms on 15m chart",
             stopLoss: "Stop-loss 1.5-2% below entry (below recent swing low)",
             takeProfit: "TP1: +2-3% (50%), TP2: +5-7% (trail remainder)",
             orderType: "limit",
             positionSize: "2% account risk",
+            steps: [
+              "Note the pre-event price level 5min before data release",
+              "After release, wait for initial volatility spike (usually 2-4% move in first 10min)",
+              "Look for bullish reversal pattern (engulfing, hammer) on 15m chart after price drops >2%",
+              "Place limit buy order at -2% to -3% from pre-event level",
+              "If filled, set SL below recent swing low and take partial profits at +3%",
+            ],
           },
         });
       }
@@ -1169,11 +1199,20 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: 0.85,
           timeframe: 'Pre-event: close; Post-event: re-enter within 4h',
           execution: {
+            when: "Close positions 2-4h BEFORE the scheduled release. Do not re-enter until 2h after.",
+            where: "Binance Futures (BTCUSDT Perpetual)",
             entry: "No new entries. Conditionally CLOSE existing leveraged positions.",
             stopLoss: "N/A",
             takeProfit: "Close 50% of leveraged longs 2h before event, remainder 30min before. Re-enter 2h post-event.",
             orderType: "conditional",
             positionSize: "Reduce to 0.5x or flat",
+            steps: [
+              "Check GDP release date/time on economic calendar (usually 8:30 AM ET)",
+              "Close 50% of all leveraged longs 4h before release",
+              "Close remaining 50% of leveraged longs 30min before release",
+              "Set alert for 2h post-release to reassess market reaction",
+              "Only re-enter if price action shows clear directional bias with volume confirmation",
+            ],
           },
         });
       }
@@ -1195,11 +1234,20 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: medImpact ? 0.72 : 0.60,
           timeframe: '1d–7d',
           execution: {
+            when: "Enter short 12-24h BEFORE unlock timestamp. Sell pressure peaks 6-12h post-unlock.",
+            where: "Bybit (ETHUSDT USDT Perpetual)",
             entry: "Limit short 5-10% below current price (accumulation zone). If event fires, add 50% at market on confirmation candle.",
             stopLoss: "Initial stop at -15% from entry. Tighten to -8% once event outcome is known.",
             takeProfit: "TP1: +25% (sell 1/3), TP2: +50% (sell 1/3), remainder trail with weekly highs",
             orderType: "limit",
             positionSize: "1.5% risk initially, add 1.5% on confirmation (3% total)",
+            steps: [
+              "Find exact unlock timestamp from tokenomics dashboard (e.g., TokenUnlocks.app)",
+              "Place limit SHORT 12-24h before unlock — aim for 5-10% below current price",
+              "Set stop-loss at -15% from entry; tighten to -8% after unlock fires",
+              "Take 1/3 profit at +25%, 1/3 at +50%, trail remainder with weekly highs",
+              "Close entire position 7d post-unlock regardless of P&L",
+            ],
           },
         });
         suggestions.push({
@@ -1210,6 +1258,8 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: 0.58,
           timeframe: '3d–14d',
           execution: {
+            when: "Start accumulating 24-48h AFTER unlock timestamp when sell pressure begins to fade",
+            where: "Coinbase (ETHUSDT Spot)",
             entry: "Split into 3 limit-buy tranches: 33% at current price, 33% at -5%, 34% at -10%",
             stopLoss: "Hard stop at -20% from avg entry, or if fundamental thesis invalidates",
             takeProfit: "No fixed TP — trail stop using 200-day MA or take partial profits at each +50% milestone",
@@ -1228,11 +1278,20 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: 0.75,
           timeframe: '1mo–12mo (position trade)',
           execution: {
+            when: "Start accumulating NOW (45+ days out). Add tranches every 5-7% dip. Accelerate if hash rate dips.",
+            where: "Binance Futures (BTCUSDT Perpetual)",
             entry: "Split into 3 limit-buy tranches: 33% at current price, 33% at -5%, 34% at -10%",
             stopLoss: "Hard stop at -20% from avg entry, or if fundamental thesis invalidates",
             takeProfit: "No fixed TP — trail stop using 200-day MA or take partial profits at each +50% milestone",
             orderType: "limit",
             positionSize: "3-5% total allocated capital, scaled over 2-4 weeks",
+            steps: [
+              "Set up DCA schedule: buy 1/3 of position now, then every 5-7% BTC dip",
+              "Monitor Bitcoin hash rate weekly — accelerate buying if hash rate drops >5%",
+              "Take partial profits (+50%) at each major milestone: pre-halving run, halving day, post-halving rally",
+              "Trail stop loss using the 200-day moving average as dynamic exit signal",
+              "Reassess thesis if BTC breaks below prior cycle low or miner capitulation fails to recover",
+            ],
           },
         });
         suggestions.push({
@@ -1243,6 +1302,8 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: 0.62,
           timeframe: '3mo–9mo',
           execution: {
+            when: "Start accumulating NOW (45+ days out). Add tranches every 5-7% dip. Focus on miner proxy tokens.",
+            where: "Bybit (BTCUSDT USDT Perpetual)",
             entry: "Split into 3 limit-buy tranches: 33% at current price, 33% at -5%, 34% at -10%",
             stopLoss: "Hard stop at -20% from avg entry, or if fundamental thesis invalidates",
             takeProfit: "No fixed TP — trail stop using 200-day MA or take partial profits at each +50% milestone",
@@ -1262,11 +1323,20 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: medImpact ? 0.70 : 0.55,
           timeframe: '1h–24h around upgrade time',
           execution: {
+            when: "Place OCO orders 1-2h before expected upgrade block. Cancel if upgrade delayed >1h.",
+            where: "OKX (SOLUSDT-SWAP Perpetual)",
             entry: "Place BUY STOP 1.5% above current price + SELL STOP 1.5% below simultaneously",
             stopLoss: "Winning side: trail to breakeven after +2% move. Losing side: fixed 1% stop",
             takeProfit: "TP1 at ±3%, TP2 at ±5%. Close 50% at TP1, trail remainder",
             orderType: "oco",
             positionSize: "1% risk per side (2% total max)",
+            steps: [
+              "Find expected upgrade block number / estimated timestamp from protocol docs or Twitter",
+              "Identify key resistance (above) and support (below) levels on 4h chart 2h before upgrade",
+              "Place OCO buy-stop above resistance and sell-stop below support 1-2h before estimated block",
+              "Monitor blockchain explorer for upgrade activation — cancel both orders if delayed >1h",
+              "Once one side fills, cancel the other within 5min; trail winner to breakeven after +2%",
+            ],
           },
         });
         suggestions.push({
@@ -1277,6 +1347,8 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: 0.60,
           timeframe: '4h–3d',
           execution: {
+            when: "Wait for upgrade confirmation on-chain (block explorer), enter long on first pullback within 4h.",
+            where: "Binance Futures (SOLUSDT Perpetual)",
             entry: "Limit buy at -2% to -3% from pre-event price (buy the dip), OR market order if bullish engulfing forms on 15m chart",
             stopLoss: "Stop-loss 1.5-2% below entry (below recent swing low)",
             takeProfit: "TP1: +2-3% (50%), TP2: +5-7% (trail remainder)",
@@ -1295,11 +1367,20 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: 0.73,
           timeframe: '1d–2w (swing)',
           execution: {
+            when: "Enter market LONG within 1h of flow report publication (usually Friday ~4pm ET).",
+            where: "Binance Futures (BTCUSDT Perpetual)",
             entry: "Market order long if weekly ETF flow report shows >$500M net positive inflow; otherwise hold",
             stopLoss: "Stop-loss at -5% below entry or if flows reverse negative for 2 consecutive weeks",
             takeProfit: "TP1: +5-8% (take 50%), trail remainder with 20-day MA for trend-following exit",
             orderType: "market",
             positionSize: "2% account risk, scale up to 3% on sustained multi-week inflows",
+            steps: [
+              "Subscribe to ETF flow data source (e.g., SoValue, Farside Investors) for real-time alerts",
+              "Check report every Friday ~4pm ET when weekly data publishes",
+              "If net inflow >$500M, enter market LONG within 1h of publication",
+              "Set stop-loss at -5% below entry or if flows reverse negative for 2 consecutive weeks",
+              "Take 50% profit at +5-8%, trail remainder with 20-day MA",
+            ],
           },
         });
         suggestions.push({
@@ -1310,11 +1391,20 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: 0.80,
           timeframe: 'Monitor weekly reports',
           execution: {
+            when: "Check weekly report Friday. If negative 2 weeks running, reduce exposure Monday open.",
+            where: "Bybit (BTCUSDT USDT Perpetual)",
             entry: "No new entries. Conditionally CLOSE existing leveraged positions.",
             stopLoss: "N/A",
             takeProfit: "Close 50% of leveraged longs when 1st negative week confirmed, close remainder on 2nd consecutive negative week",
             orderType: "conditional",
             positionSize: "Reduce to 0.5x or flat until flows recover positive",
+            steps: [
+              "Set calendar reminder for every Friday ETF flow report (~4pm ET)",
+              "1st negative week: close 50% of leveraged long positions",
+              "2nd consecutive negative week: close ALL remaining leveraged positions immediately on Monday open",
+              "Do not re-enter until flows turn positive for at least 1 consecutive week",
+              "Monitor correlation between outflow magnitude and BTC price drawdown depth",
+            ],
           },
         });
       }
@@ -1336,6 +1426,8 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: 0.55,
           timeframe: 'Event day + 1-4w post-decision',
           execution: {
+            when: "Build position 3-5 days BEFORE deadline. If no approval rumor by T-1, reduce size 50%.",
+            where: "Binance Futures (ETHUSDT Perpetual)",
             entry: "Limit long 5-10% below current price (accumulation zone). If event fires, add 50% at market on confirmation candle.",
             stopLoss: "Initial stop at -15% from entry. Tighten to -8% once event outcome is known.",
             takeProfit: "TP1: +25% (sell 1/3), TP2: +50% (sell 1/3), remainder trail with weekly highs",
@@ -1351,11 +1443,20 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: 0.70,
           timeframe: 'Event day ±3d',
           execution: {
+            when: "Set OCO 24h before deadline decision window (usually 1-5pm ET). Wider stops (+/-4%).",
+            where: "Bybit (ETHUSDT USDT Perpetual)",
             entry: "Place BUY STOP 1.5% above current price + SELL STOP 1.5% below simultaneously",
             stopLoss: "Winning side: trail to breakeven after +2% move. Losing side: fixed 1% stop",
             takeProfit: "TP1 at ±3%, TP2 at ±5%. Close 50% at TP1, trail remainder",
             orderType: "oco",
             positionSize: "1% risk per side (2% total max)",
+            steps: [
+              "Find the exact SEC deadline date (check SEC.gov or crypto news calendar)",
+              "24h before deadline, identify key levels — place buy-stop 4% above, sell-stop 4% below",
+              "Wider stops are critical here: SEC decisions can cause +/-25% moves",
+              "Monitor Twitter/X for SEC filing updates during decision window (1-5pm ET)",
+              "Cancel losing side within 10min of fill; winner gets wide trail using 4h candle structure",
+            ],
           },
         });
         // Also suggest L2 longs
@@ -1367,6 +1468,8 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: 0.48,
           timeframe: '1d–2w',
           execution: {
+            when: "Build position 3-5 days BEFORE deadline. L2 beta play — smaller size due to higher volatility.",
+            where: "OKX (ARBUSDT-SWAP Perpetual)",
             entry: "Limit long 5-10% below current price (accumulation zone). If event fires, add 50% at market on confirmation candle.",
             stopLoss: "Initial stop at -15% from entry. Tighten to -8% once event outcome is known.",
             takeProfit: "TP1: +25% (sell 1/3), TP2: +50% (sell 1/3), remainder trail with weekly highs",
@@ -1385,11 +1488,20 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: 0.65,
           timeframe: '2w–3mo',
           execution: {
+            when: "Start building EURC/EU-stablecoin position 2 weeks before effective date. Scale over 4 weeks.",
+            where: "Binance Spot (EURCUSDT)",
             entry: "Split into 3 limit-buy tranches: 33% at current price, 33% at -5%, 34% at -10%",
             stopLoss: "Hard stop at -20% from avg entry, or if fundamental thesis invalidates",
             takeProfit: "No fixed TP — trail stop using 200-day MA or take partial profits at each +50% milestone",
             orderType: "limit",
             positionSize: "3-5% total allocated capital, scaled over 2-4 weeks",
+            steps: [
+              "Find MiCA effective date from official EU regulatory sources (usually Dec 2024 / June 2025)",
+              "Start 2 weeks before: buy first tranche (33%) of EURC or EU-compliant stablecoin position",
+              "Add second tranche (-5%) at T-1 week before effective date",
+              "Add final tranche (-10%) on or shortly after effective date if thesis holds",
+              "Monitor EU exchange volumes for USDT→EURC rotation as adoption signal",
+            ],
           },
         });
         suggestions.push({
@@ -1400,11 +1512,20 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: 0.75,
           timeframe: 'Before effective date',
           execution: {
+            when: "Begin rotation 2-4 weeks before MiCA effective date. Complete 50% reduction 1 week prior.",
+            where: "Binance Spot (USDT → EURCUSDT / USDC)",
             entry: "No new entries. Conditionally CLOSE existing leveraged positions.",
             stopLoss: "N/A",
             takeProfit: "Gradually reduce USDT exposure by 50% before effective date, remainder rotate to compliant alternatives",
             orderType: "conditional",
             positionSize: "Reduce to 0.5x or flat",
+            steps: [
+              "Identify if you have EU counterparty exposure (exchanges, OTC desks, payment processors)",
+              "4 weeks before effective date: rotate 25% of USDT holdings to EURC or USDC",
+              "2 weeks before effective date: rotate another 25% (50% total reduced)",
+              "1 week before: complete rotation — minimize USDT balance in EU-facing accounts",
+              "Monitor EU exchange announcements about USDT delistings or restrictions",
+            ],
           },
         });
       }
@@ -1425,6 +1546,8 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: medImpact ? 0.62 : 0.48,
           timeframe: '4h–3d post-vote',
           execution: {
+            when: "Enter MARKET LONG immediately after vote result confirms (Snapshot shows PASS). Within 15min of result.",
+            where: "Binance Futures (AAVEUSDT Perpetual)",
             entry: "Market order long immediately on vote-pass confirmation candle; do not front-run before result is final",
             stopLoss: "Stop-loss 1.5-2% below entry (below recent swing low)",
             takeProfit: "TP1: +2-3% (50%), TP2: +5-7% (trail remainder)",
@@ -1440,6 +1563,8 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: 0.56,
           timeframe: '1d pre-vote to 1d post-vote',
           execution: {
+            when: "If token pumped >10% into vote date, place LIMIT SHORT 2-4h BEFORE vote closes.",
+            where: "Bybit (AAVEUSDT USDT Perpetual)",
             entry: "Limit short at current price 12-24h before vote if token has pumped >10%; OR stop-market short on rejection confirmation",
             stopLoss: "Stop-loss 1.5-2% above entry (above recent swing high)",
             takeProfit: "TP1: -2% (take 50%), TP2: -4-5% (trail rest)",
@@ -1458,6 +1583,8 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: 0.52,
           timeframe: '1d–1w',
           execution: {
+            when: "Enter on activation confirmation tweet/announcement. Market order within 30min.",
+            where: "OKX (UNIUSDT-SWAP Perpetual)",
             entry: "Market order long immediately on fee-switch activation confirmation; small limit long ahead of vote as initial position",
             stopLoss: "Stop-loss at -5% below entry or if vote fails/rejected",
             takeProfit: "TP1: +5% (take 50%), TP2: +10-15% (trail remainder with 20-day MA)",
@@ -1482,11 +1609,20 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: 0.76,
           timeframe: '15m–4h (announcement window)',
           execution: {
+            when: "Place OCO 15min before ECB press conference start (usually 12:45 GMT).",
+            where: "OANDA / FXCM / TradingView (Spot FX — EUR/USD)",
             entry: "Place BUY STOP 1.5% above current price + SELL STOP 1.5% below simultaneously",
             stopLoss: "Winning side: trail to breakeven after +2% move. Losing side: fixed 1% stop",
             takeProfit: "TP1 at ±3%, TP2 at ±5%. Close 50% at TP1, trail remainder",
             orderType: "oco",
             positionSize: "1% risk per side (2% total max)",
+            steps: [
+              "Find ECB press conference date/time (usually Thursday 12:45 GMT / 8:45 AM ET)",
+              "15min before press conference, identify EUR/USD range on 5m chart",
+              "Place buy-stop above recent resistance and sell-stop below support via OCO order",
+              "Listen to ECB President Lagarde's tone during press conference for hawkish/dovish clues",
+              "Cancel losing side within 5min of fill; trail winner with breakeven stop after +50 pips",
+            ],
           },
         });
         suggestions.push({
@@ -1497,6 +1633,8 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: 0.58,
           timeframe: '4h–2d',
           execution: {
+            when: "If EUR rips vs USD post-ECB, wait for BTC to show bullish divergence on 1h chart (1-4h lag).",
+            where: "Bybit (BTCUSDT USDT Perpetual)",
             entry: "Limit buy at -2% to -3% from pre-event price (buy the dip), OR market order if bullish engulfing forms on 15m chart",
             stopLoss: "Stop-loss 1.5-2% below entry (below recent swing low)",
             takeProfit: "TP1: +2-3% (50%), TP2: +5-7% (trail remainder)",
@@ -1515,6 +1653,8 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: 0.54,
           timeframe: '1h–3d',
           execution: {
+            when: "Set STOP-MARKET SHORT now at current price (BOJ can intervene anytime unannounced). Or set alert for BOJ verbal warning.",
+            where: "OANDA / FXCM / TradingView (Spot FX — USD/JPY)",
             entry: "Stop-market SHORT at break of first support level after release, OR market short if bearish candle confirms within 15min",
             stopLoss: "Stop-loss 1.5-2% above entry (above recent swing high). Use wider stops given intervention volatility.",
             takeProfit: "TP1: -100 pips (take 50%), TP2: -250+ pips (trail rest)",
@@ -1530,11 +1670,20 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
           confidence: 0.72,
           timeframe: 'Pre-event: reduce; Post-event: reassess',
           execution: {
+            when: "Reduce JPY-funded carry trades now. If BOJ intervenes, close remainder within 1h.",
+            where: "Interactive Brokers / CQG (CFD Futures — JPY pairs / US500)",
             entry: "No new entries. Conditionally CLOSE existing leveraged positions.",
             stopLoss: "N/A",
             takeProfit: "Close all JPY-funded carry positions 24h before event; re-assess 4h post-intervention signal",
             orderType: "conditional",
             positionSize: "Reduce to flat on carry trade exposure",
+            steps: [
+              "Identify all positions funded by JPY borrowing (JPY shorts, risk-on longs with JPY funding)",
+              "Close 50% of JPY-funded carry trade exposure immediately upon BOJ warning/intervention signal",
+              "Set price alert for USD/JPY — if it drops >200 pips rapidly, close remaining 50% within 1h",
+              "Watch for BOJ Governor Ueda's verbal intervention cues (usually before market open Tokyo)",
+              "If no intervention materializes within 5 days, reassess and potentially rebuild positions gradually",
+            ],
           },
         });
       }
@@ -1550,11 +1699,20 @@ sourceUrl: 'https://www.bis.org/about/cbdc.htm',
         confidence: 0.88,
         timeframe: 'N/A — informational only',
         execution: {
+          when: "No action needed. Monitor Twitter/Discord for post-release bug reports over next 48h.",
+          where: "N/A — informational only, no trading required",
           entry: "No new entries. Conditionally CLOSE existing leveraged positions.",
           stopLoss: "N/A",
           takeProfit: "No action required. Software upgrades are informational — do not adjust positions based on release alone.",
           orderType: "conditional",
           positionSize: "Hold current size — no new positions",
+          steps: [
+            "Note the software release version and date for reference",
+            "Monitor project's official Twitter/X and Discord for 48h post-release",
+            "Watch for bug reports, network issues, or unexpected breaking changes",
+            "If critical bugs emerge that affect token utility/protocol function, re-evaluate holdings",
+            "No trading action needed unless release introduces a material fundamental change",
+          ],
         },
       });
     }

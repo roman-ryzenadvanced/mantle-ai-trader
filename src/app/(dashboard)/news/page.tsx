@@ -137,11 +137,14 @@ interface TradeSuggestion {
   confidence: number;       // 0-1
   timeframe: string;        // e.g., "1h-4h", "1d-3d"
   execution?: {             // detailed order placement instructions
+    when: string;          // e.g., "2h before event", "At announcement moment"
+    where: string;         // e.g., "Binance Futures (BTCUSDT Perp)"
     entry: string;
     stopLoss: string;
     takeProfit: string;
     orderType: 'market' | 'limit' | 'oco' | 'stop-market' | 'conditional';
     positionSize: string;
+    steps?: string[];      // step-by-step checklist
   };
 }
 
@@ -824,10 +827,22 @@ function UpcomingEventCard({ event }: { event: UpcomingEvent }) {
 
                     {/* ── Execution Instructions (inline) ── */}
                     {sig.execution && (
-                      <div className="mt-1.5 pt-1.5 border-t border-border/30 space-y-1">
+                      <div className="mt-1.5 pt-1.5 border-t border-border/30 space-y-1.5">
                         <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider text-blue-500/80 font-bold">
                           <Target className="w-2.5 h-2.5" /> How to Execute
                         </div>
+
+                        {/* WHEN + WHERE — prominent top row */}
+                        <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[10px]">
+                          <span className="font-bold text-amber-600 shrink-0 mt-0.5">WHEN</span>
+                          <span className="text-foreground leading-snug font-medium">{sig.execution.when}</span>
+
+                          <span className="font-bold text-cyan-600 shrink-0 mt-0.5">WHERE</span>
+                          <span className="text-cyan-700 dark:text-cyan-400 leading-snug font-mono">{sig.execution.where}</span>
+                        </div>
+
+                        {/* Divider */}
+                        <div className="h-px bg-border/40" />
 
                         {/* Entry */}
                         <div className="flex items-start gap-1">
@@ -860,6 +875,20 @@ function UpcomingEventCard({ event }: { event: UpcomingEvent }) {
                           </span>
                           <span className="text-[9px] text-muted-foreground">{sig.execution.positionSize}</span>
                         </div>
+
+                        {/* Steps checklist */}
+                        {sig.execution.steps && sig.execution.steps.length > 0 && (
+                          <div className="space-y-0.5 pt-1 border-t border-border/20">
+                            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Checklist</span>
+                            <ul className="space-y-0.5 ml-3.5 list-disc list-outside">
+                              {sig.execution.steps.map((step, si) => (
+                                <li key={si} className="text-[10px] text-muted-foreground leading-relaxed marker:text-amber-500/60">
+                                  {step}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
