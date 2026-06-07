@@ -22,9 +22,9 @@ interface Position {
 function PositionsSkeleton() {
   return (
     <div className="space-y-3">
-      <Skeleton className="h-10 w-full bg-gray-800 rounded-lg" />
+      <Skeleton className="h-10 w-full rounded-lg" />
       {Array.from({ length: 3 }).map((_, i) => (
-        <Skeleton key={i} className="h-14 w-full bg-gray-800 rounded-lg" />
+        <Skeleton key={i} className="h-14 w-full rounded-lg" />
       ))}
     </div>
   );
@@ -72,12 +72,12 @@ export default function PositionsPage() {
   };
 
   const pnlClass = (pnl: number) =>
-    pnl >= 0 ? 'text-green-400' : 'text-red-400';
+    pnl >= 0 ? 'text-green-600' : 'text-red-600';
 
   const sideBadgeClass = (side: string) =>
     side === 'LONG'
-      ? 'bg-green-500/20 text-green-400 border-green-500/30'
-      : 'bg-red-500/20 text-red-400 border-red-500/30';
+      ? 'bg-green-500/15 text-green-600 border-green-500/30'
+      : 'bg-red-500/15 text-red-600 border-red-500/30';
 
   if (loading) {
     return (
@@ -92,15 +92,14 @@ export default function PositionsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Layers className="w-7 h-7 text-blue-400" />
+          <Layers className="w-7 h-7 text-blue-600" />
           <h1 className="text-2xl font-bold">Positions</h1>
-          <Badge variant="outline" className="text-gray-400 border-gray-700">
+          <Badge variant="outline" className="text-muted-foreground">
             {positions.length} open
           </Badge>
         </div>
         <Button
           variant="outline"
-          className="border-gray-700 text-gray-300 hover:bg-gray-800"
           onClick={fetchPositions}
         >
           <RefreshCw className="w-4 h-4 mr-2" />
@@ -109,17 +108,16 @@ export default function PositionsPage() {
       </div>
 
       {positions.length === 0 ? (
-        <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl p-12 text-center">
-          <Layers className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-400 mb-2">No open positions</h3>
-          <p className="text-sm text-gray-500">
+        <div className="bg-card border border-border rounded-xl p-12 text-center">
+          <Layers className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-foreground mb-2">No open positions</h3>
+          <p className="text-sm text-muted-foreground">
             Your open positions will appear here. Start trading to see them.
           </p>
         </div>
       ) : (
-        <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl overflow-hidden">
-          {/* Table Header */}
-          <div className="grid grid-cols-7 gap-4 px-4 py-3 border-b border-gray-800 text-xs font-medium text-gray-500 uppercase tracking-wider">
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <div className="grid grid-cols-7 gap-4 px-4 py-3 border-b border-border text-xs font-medium text-muted-foreground uppercase tracking-wider">
             <span>Symbol</span>
             <span>Side</span>
             <span>Quantity</span>
@@ -129,22 +127,21 @@ export default function PositionsPage() {
             <span className="text-right">Actions</span>
           </div>
 
-          {/* Table Body */}
-          <div className="divide-y divide-gray-800/50">
+          <div className="divide-y divide-border">
             {positions.map((pos) => (
               <div
                 key={pos.id}
-                className="grid grid-cols-7 gap-4 px-4 py-3 items-center text-sm hover:bg-gray-800/30 transition-colors"
+                className="grid grid-cols-7 gap-4 px-4 py-3 items-center text-sm hover:bg-accent transition-colors"
               >
-                <span className="font-medium text-white">{pos.symbol}</span>
+                <span className="font-medium text-foreground">{pos.symbol}</span>
                 <div>
                   <Badge variant="outline" className={sideBadgeClass(pos.side)}>
                     {pos.side}
                   </Badge>
                 </div>
-                <span className="text-gray-300">{pos.quantity}</span>
-                <span className="text-gray-300">${pos.avgEntryPrice.toFixed(2)}</span>
-                <span className="text-gray-300">${pos.currentPrice.toFixed(2)}</span>
+                <span className="text-foreground/80">{pos.quantity}</span>
+                <span className="text-foreground/80">${pos.avgEntryPrice.toFixed(2)}</span>
+                <span className="text-foreground/80">${pos.currentPrice.toFixed(2)}</span>
                 <div>
                   <span className={pnlClass(pos.unrealizedPnL)}>
                     ${pos.unrealizedPnL.toFixed(2)} ({pos.unrealizedPnLPercent >= 0 ? '+' : ''}
@@ -155,7 +152,7 @@ export default function PositionsPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                    className="h-8 text-xs text-red-600 hover:text-red-700 hover:bg-red-500/10"
                     onClick={() => handleClosePosition(pos.symbol)}
                   >
                     <XCircle className="w-3.5 h-3.5 mr-1" />

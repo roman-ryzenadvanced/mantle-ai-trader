@@ -26,21 +26,21 @@ const sentimentLabel = (score?: number) => {
 };
 
 const sentimentBadgeClass: Record<string, string> = {
-  positive: 'bg-green-500/20 text-green-400 border-green-500/30',
-  negative: 'bg-red-500/20 text-red-400 border-red-500/30',
-  neutral: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+  positive: 'bg-green-500/15 text-green-600 border-green-500/30',
+  negative: 'bg-red-500/15 text-red-600 border-red-500/30',
+  neutral: 'bg-muted text-muted-foreground border-border',
 };
 
 function NewsCardSkeleton() {
   return (
-    <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl p-4 space-y-3">
+    <div className="bg-card border border-border rounded-xl p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <Skeleton className="h-5 w-20 bg-gray-800" />
-        <Skeleton className="h-5 w-16 bg-gray-800" />
+        <Skeleton className="h-5 w-20" />
+        <Skeleton className="h-5 w-16" />
       </div>
-      <Skeleton className="h-6 w-full bg-gray-800" />
-      <Skeleton className="h-4 w-full bg-gray-800" />
-      <Skeleton className="h-4 w-3/4 bg-gray-800" />
+      <Skeleton className="h-6 w-full" />
+      <Skeleton className="h-4 w-full" />
+      <Skeleton className="h-4 w-3/4" />
     </div>
   );
 }
@@ -71,15 +71,14 @@ export default function NewsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Newspaper className="w-7 h-7 text-blue-400" />
+          <Newspaper className="w-7 h-7 text-blue-600" />
           <h1 className="text-2xl font-bold">News Feed</h1>
-          <Badge variant="outline" className="text-gray-400 border-gray-700">
+          <Badge variant="outline" className="text-muted-foreground">
             {news.length} articles
           </Badge>
         </div>
         <Button
           variant="outline"
-          className="border-gray-700 text-gray-300 hover:bg-gray-800"
           onClick={fetchNews}
         >
           <RefreshCw className="w-4 h-4 mr-2" />
@@ -94,10 +93,10 @@ export default function NewsPage() {
           ))}
         </div>
       ) : news.length === 0 ? (
-        <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl p-12 text-center">
-          <Newspaper className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-400 mb-2">No news available</h3>
-          <p className="text-sm text-gray-500">
+        <div className="bg-card border border-border rounded-xl p-12 text-center">
+          <Newspaper className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-foreground mb-2">No news available</h3>
+          <p className="text-sm text-muted-foreground">
             News articles will appear here as they are fetched from configured sources.
           </p>
         </div>
@@ -110,16 +109,15 @@ export default function NewsPage() {
             return (
               <div
                 key={article.id}
-                className={`bg-gray-900/50 backdrop-blur-sm border rounded-xl p-4 space-y-3 transition-colors hover:bg-gray-900/70 ${
-                  isBreaking ? 'border-red-500/50' : 'border-gray-800'
+                className={`bg-card border rounded-xl p-4 space-y-3 transition-colors hover:bg-accent/50 ${
+                  isBreaking ? 'border-red-500/50' : 'border-border'
                 }`}
               >
-                {/* Header */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500">{article.source}</span>
+                    <span className="text-xs text-muted-foreground">{article.source}</span>
                     {isBreaking && (
-                      <span className="flex items-center gap-1 text-xs text-red-400 font-medium">
+                      <span className="flex items-center gap-1 text-xs text-red-600 font-medium">
                         <AlertTriangle className="w-3 h-3" />
                         BREAKING
                       </span>
@@ -130,17 +128,14 @@ export default function NewsPage() {
                   </Badge>
                 </div>
 
-                {/* Title */}
-                <h3 className="font-medium text-white leading-snug">{article.title}</h3>
+                <h3 className="font-medium text-foreground leading-snug">{article.title}</h3>
 
-                {/* Summary */}
                 {article.summary && (
-                  <p className="text-sm text-gray-400 line-clamp-2">{article.summary}</p>
+                  <p className="text-sm text-muted-foreground line-clamp-2">{article.summary}</p>
                 )}
 
-                {/* Footer */}
                 <div className="flex items-center justify-between pt-1">
-                  <span className="text-xs text-gray-500">
+                  <span className="text-xs text-muted-foreground">
                     {article.publishedAt
                       ? new Date(article.publishedAt).toLocaleDateString()
                       : 'Unknown date'}
@@ -150,7 +145,7 @@ export default function NewsPage() {
                       href={article.sourceUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                      className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
                     >
                       Read more
                       <ExternalLink className="w-3 h-3" />

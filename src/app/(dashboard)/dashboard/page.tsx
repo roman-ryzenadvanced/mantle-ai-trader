@@ -79,12 +79,10 @@ export default function DashboardPage() {
 
         if (portfolio) {
           setPortfolioValue(portfolio.totalValue || 100000);
-          // Portfolio has realizedPnL + unrealizedPnL, not dailyPnL
           setDailyPnL((portfolio.realizedPnL || 0) + (portfolio.unrealizedPnL || 0));
         }
         setTotalTrades(positions.length);
 
-        // Build equity curve from trade history
         const historyRes = await fetch('/api/trading/demo?action=history');
         if (historyRes.ok) {
           const historyJson = await historyRes.json();
@@ -102,14 +100,12 @@ export default function DashboardPage() {
         }
       }
 
-      // Fetch signals for stats (API returns { success, data: signals })
       const sigRes = await fetch('/api/trading/signals');
       if (sigRes.ok) {
         const sigJson = await sigRes.json();
         const sigData = sigJson.data || [];
         const executed = sigData.filter((s: { status: string }) => s.status === 'EXECUTED');
         setTotalTrades(prev => Math.max(prev, executed.length));
-        // Signals don't have a "result" field, so derive win rate from confidence >= 70
         if (executed.length > 0) {
           const wins = executed.filter((s: { confidence?: number }) => (s.confidence || 0) >= 70).length;
           setWinRate(Math.round((wins / executed.length) * 100));
@@ -125,13 +121,10 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchDashboardData();
     addLog('INFO', 'Dashboard initialized', { user: session?.user?.email });
-
-    // Refresh every 30 seconds
     const interval = setInterval(fetchDashboardData, 30000);
     return () => clearInterval(interval);
   }, [fetchDashboardData, addLog, session?.user?.email]);
 
-  // Update risk state from portfolio data
   useEffect(() => {
     const initialCapital = 100000;
     const drawdown = portfolioValue < initialCapital
@@ -149,7 +142,7 @@ export default function DashboardPage() {
     return (
       <div className="space-y-6 animate-pulse">
         {[1, 2, 3].map(i => (
-          <div key={i} className="h-32 bg-gray-900/50 rounded-xl" />
+          <div key={i} className="h-32 bg-card rounded-xl" />
         ))}
       </div>
     );
@@ -176,16 +169,16 @@ export default function DashboardPage() {
         <div className="lg:col-span-2">
           <ActivityLog logs={logs} />
         </div>
-        <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-800">
+        <Card className="bg-card border border-border">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <Brain className="w-5 h-5 text-blue-400" />
+              <Brain className="w-5 h-5 text-blue-600" />
               Quick Actions
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <Button
-              className="w-full justify-start gap-2 bg-blue-600 hover:bg-blue-700"
+              className="w-full justify-start gap-2 bg-blue-600 hover:bg-blue-700 text-white"
               onClick={async () => {
                 addLog('SIGNAL', 'Generating BTCUSDT signal...');
                 toast.info('Signal generation initiated');
@@ -215,7 +208,7 @@ export default function DashboardPage() {
               Generate BTCUSDT Signal
             </Button>
             <Button
-              className="w-full justify-start gap-2 bg-gray-700 hover:bg-gray-600"
+              className="w-full justify-start gap-2 bg-muted text-foreground hover:bg-accent"
               onClick={() => {
                 addLog('INFO', 'Refreshing dashboard data...');
                 fetchDashboardData();
@@ -225,7 +218,7 @@ export default function DashboardPage() {
               Refresh Data
             </Button>
             <Button
-              className="w-full justify-start gap-2 bg-gray-700 hover:bg-gray-600"
+              className="w-full justify-start gap-2 bg-muted text-foreground hover:bg-accent"
               onClick={async () => {
                 addLog('WARN', 'Running risk assessment...');
                 try {
@@ -251,7 +244,7 @@ export default function DashboardPage() {
               Risk Check
             </Button>
             <Button
-              className="w-full justify-start gap-2 bg-gray-700 hover:bg-gray-600"
+              className="w-full justify-start gap-2 bg-muted text-foreground hover:bg-accent"
               onClick={() => {
                 addLog('INFO', 'Navigating to trade analytics...');
                 router.push('/trades');
@@ -266,19 +259,19 @@ export default function DashboardPage() {
 
       {/* Status badges */}
       <div className="flex gap-3 items-center">
-        <Badge variant="outline" className="text-gray-400 border-gray-700">
+        <Badge variant="outline" className="text-muted-foreground">
           Mode: {tradingModeLabel}
         </Badge>
-        <Badge variant="outline" className="text-gray-400 border-gray-700">
+        <Badge variant="outline" className="text-muted-foreground">
           Session: Active
         </Badge>
         <Badge
           variant="outline"
           className={riskState.isPaused
-            ? 'text-yellow-400 border-yellow-700'
+            ? 'text-yellow-600 border-yellow-400'
             : riskState.permanentlyHalted
-              ? 'text-red-400 border-red-700'
-              : 'text-green-400 border-green-700'}
+              ? 'text-red-600 border-red-400'
+              : 'text-green-600 border-green-400'}
         >
           Risk: {riskState.permanentlyHalted ? 'HALTED' : riskState.isPaused ? 'PAUSED' : 'OK'}
         </Badge>

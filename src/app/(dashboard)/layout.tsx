@@ -49,8 +49,8 @@ export default function DashboardLayout({
 
   if (status === 'loading' || !session) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-950">
-        <div className="animate-pulse text-gray-400">Loading...</div>
+      <div className="flex items-center justify-center h-screen bg-background">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
       </div>
     );
   }
@@ -58,7 +58,7 @@ export default function DashboardLayout({
   const tradingMode = 'demo';
 
   return (
-    <div className="flex h-screen bg-gray-950 text-white overflow-hidden">
+    <div className="flex h-screen bg-background text-foreground overflow-hidden">
       <Sidebar activeTab={activeTab} onTabChange={handleTabChange} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header

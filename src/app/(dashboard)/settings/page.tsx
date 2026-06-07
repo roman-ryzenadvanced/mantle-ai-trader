@@ -47,13 +47,12 @@ export default function SettingsPage() {
     try {
       const res = await fetch('/api/trading/settings');
       if (res.ok) {
-        await res.json(); // API returns exchange accounts — we keep trading prefs in localStorage
+        await res.json();
       }
     } catch {
       // Ignore
     }
 
-    // Load all trading preferences from localStorage
     if (typeof window === 'undefined') { setLoading(false); return; }
     setSettings({
       tradingMode: (localStorage.getItem('mantle_trading_mode') as 'demo' | 'live') || 'demo',
@@ -95,7 +94,7 @@ export default function SettingsPage() {
       <div className="space-y-6">
         <h1 className="text-2xl font-bold">Settings</h1>
         {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="h-48 bg-gray-800 rounded-xl" />
+          <Skeleton key={i} className="h-48 rounded-xl" />
         ))}
       </div>
     );
@@ -104,23 +103,23 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div className="flex items-center gap-3">
-        <Settings className="w-7 h-7 text-blue-400" />
+        <Settings className="w-7 h-7 text-blue-600" />
         <h1 className="text-2xl font-bold">Settings</h1>
       </div>
 
       {/* Trading Mode */}
-      <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl">
+      <Card className="bg-card border border-border rounded-xl">
         <CardHeader className="pb-4">
-          <CardTitle className="text-lg font-semibold text-white flex items-center gap-2">
-            <Shield className="w-5 h-5 text-blue-400" />
+          <CardTitle className="text-lg font-semibold text-foreground flex items-center gap-2">
+            <Shield className="w-5 h-5 text-blue-600" />
             Trading Mode
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-white">Demo Mode</p>
-              <p className="text-xs text-gray-500">Trade with simulated funds</p>
+              <p className="text-sm font-medium text-foreground">Demo Mode</p>
+              <p className="text-xs text-muted-foreground">Trade with simulated funds</p>
             </div>
             <Switch
               checked={settings.tradingMode === 'live'}
@@ -136,8 +135,8 @@ export default function SettingsPage() {
             <div
               className={`px-3 py-1 rounded-lg text-xs font-medium ${
                 settings.tradingMode === 'demo'
-                  ? 'bg-blue-500/20 text-blue-400'
-                  : 'bg-green-500/20 text-green-400'
+                  ? 'bg-blue-500/15 text-blue-600'
+                  : 'bg-green-500/15 text-green-600'
               }`}
             >
               {settings.tradingMode.toUpperCase()}
@@ -147,17 +146,16 @@ export default function SettingsPage() {
       </Card>
 
       {/* Risk Settings */}
-      <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl">
+      <Card className="bg-card border border-border rounded-xl">
         <CardHeader className="pb-4">
-          <CardTitle className="text-lg font-semibold text-white flex items-center gap-2">
-            <Shield className="w-5 h-5 text-yellow-400" />
+          <CardTitle className="text-lg font-semibold text-foreground flex items-center gap-2">
+            <Shield className="w-5 h-5 text-yellow-600" />
             Risk Management
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
-          {/* Risk Level */}
           <div className="space-y-1.5">
-            <Label className="text-sm text-gray-400">Risk Level</Label>
+            <Label className="text-sm text-muted-foreground">Risk Level</Label>
             <Select
               value={settings.riskLevel}
               onValueChange={(val) =>
@@ -167,10 +165,10 @@ export default function SettingsPage() {
                 }))
               }
             >
-              <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+              <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-gray-800 border-gray-700">
+              <SelectContent>
                 <SelectItem value="Conservative">Conservative</SelectItem>
                 <SelectItem value="Moderate">Moderate</SelectItem>
                 <SelectItem value="Aggressive">Aggressive</SelectItem>
@@ -178,9 +176,8 @@ export default function SettingsPage() {
             </Select>
           </div>
 
-          {/* Max Position Size */}
           <div className="space-y-1.5">
-            <Label className="text-sm text-gray-400">
+            <Label className="text-sm text-muted-foreground">
               Max Position Size: ${settings.maxPositionSize}
             </Label>
             <Input
@@ -192,15 +189,13 @@ export default function SettingsPage() {
                   maxPositionSize: parseInt(e.target.value) || 0,
                 }))
               }
-              className="bg-gray-800 border-gray-700 text-white"
               min="100"
               step="100"
             />
           </div>
 
-          {/* Max Leverage */}
           <div className="space-y-1.5">
-            <Label className="text-sm text-gray-400">
+            <Label className="text-sm text-muted-foreground">
               Max Leverage: {settings.maxLeverage}x
             </Label>
             <Slider
@@ -213,7 +208,7 @@ export default function SettingsPage() {
               step={1}
               className="py-2"
             />
-            <div className="flex justify-between text-xs text-gray-500">
+            <div className="flex justify-between text-xs text-muted-foreground">
               <span>1x</span>
               <span>25x</span>
               <span>50x</span>
@@ -222,11 +217,10 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Auto Trading */}
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-white">Auto Trading</p>
-              <p className="text-xs text-gray-500">Automatically execute signals</p>
+              <p className="text-sm font-medium text-foreground">Auto Trading</p>
+              <p className="text-xs text-muted-foreground">Automatically execute signals</p>
             </div>
             <Switch
               checked={settings.autoTrading}
@@ -239,18 +233,18 @@ export default function SettingsPage() {
       </Card>
 
       {/* Notifications */}
-      <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl">
+      <Card className="bg-card border border-border rounded-xl">
         <CardHeader className="pb-4">
-          <CardTitle className="text-lg font-semibold text-white flex items-center gap-2">
-            <Bell className="w-5 h-5 text-purple-400" />
+          <CardTitle className="text-lg font-semibold text-foreground flex items-center gap-2">
+            <Bell className="w-5 h-5 text-purple-600" />
             Notifications
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-white">Telegram Alerts</p>
-              <p className="text-xs text-gray-500">Receive trade alerts via Telegram</p>
+              <p className="text-sm font-medium text-foreground">Telegram Alerts</p>
+              <p className="text-xs text-muted-foreground">Receive trade alerts via Telegram</p>
             </div>
             <Switch
               checked={settings.telegramEnabled}
@@ -261,13 +255,12 @@ export default function SettingsPage() {
           </div>
           {settings.telegramEnabled && (
             <div className="space-y-1.5">
-              <Label className="text-sm text-gray-400">Telegram Chat ID</Label>
+              <Label className="text-sm text-muted-foreground">Telegram Chat ID</Label>
               <Input
                 value={settings.telegramChatId}
                 onChange={(e) =>
                   setSettings((prev) => ({ ...prev, telegramChatId: e.target.value }))
                 }
-                className="bg-gray-800 border-gray-700 text-white"
                 placeholder="Enter your Telegram chat ID"
               />
             </div>
@@ -279,7 +272,7 @@ export default function SettingsPage() {
       <div className="flex justify-end pt-2">
         <Button
           onClick={handleSave}
-          className="bg-blue-600 hover:bg-blue-700 min-w-[120px]"
+          className="bg-blue-600 hover:bg-blue-700 text-white min-w-[120px]"
           disabled={saving}
         >
           <Save className="w-4 h-4 mr-2" />

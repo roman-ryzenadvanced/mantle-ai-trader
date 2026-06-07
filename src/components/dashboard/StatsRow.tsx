@@ -33,13 +33,13 @@ export function StatsRow({ portfolioValue, dailyPnL, totalTrades, winRate }: Sta
         variants={cardVariants}
         initial="hidden"
         animate="visible"
-        className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl p-4"
+        className="bg-card border border-border rounded-xl p-4"
       >
-        <div className="flex items-center gap-2 text-gray-400 text-sm mb-2">
+        <div className="flex items-center gap-2 text-muted-foreground text-sm mb-2">
           <DollarSign className="w-4 h-4" />
           <span>Portfolio Value</span>
         </div>
-        <div className="text-2xl font-bold text-white">
+        <div className="text-2xl font-bold text-foreground">
           <AnimatedCounter value={portfolioValue} prefix="$" decimals={2} />
         </div>
       </motion.div>
@@ -50,24 +50,17 @@ export function StatsRow({ portfolioValue, dailyPnL, totalTrades, winRate }: Sta
         variants={cardVariants}
         initial="hidden"
         animate="visible"
-        className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl p-4"
+        className="bg-card border border-border rounded-xl p-4"
       >
-        <div className="flex items-center gap-2 text-gray-400 text-sm mb-2">
+        <div className="flex items-center gap-2 text-muted-foreground text-sm mb-2">
           {isPositive ? (
-            <TrendingUp className="w-4 h-4 text-green-400" />
+            <TrendingUp className="w-4 h-4 text-green-600" />
           ) : (
-            <TrendingDown className="w-4 h-4 text-red-400" />
+            <TrendingDown className="w-4 h-4 text-red-600" />
           )}
           <span>Today&apos;s P&amp;L</span>
         </div>
-        <div
-          className={cn(
-            'text-2xl font-bold',
-            isPositive
-              ? 'text-green-400 [text-shadow:0_0_12px_rgba(74,222,128,0.4)]'
-              : 'text-red-400 [text-shadow:0_0_12px_rgba(248,113,113,0.4)]'
-          )}
-        >
+        <div className={cn('text-2xl font-bold', isPositive ? 'text-green-600' : 'text-red-600')}>
           <AnimatedCounter
             value={Math.abs(dailyPnL)}
             prefix={isPositive ? '+$' : '-$'}
@@ -82,13 +75,13 @@ export function StatsRow({ portfolioValue, dailyPnL, totalTrades, winRate }: Sta
         variants={cardVariants}
         initial="hidden"
         animate="visible"
-        className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl p-4"
+        className="bg-card border border-border rounded-xl p-4"
       >
-        <div className="flex items-center gap-2 text-gray-400 text-sm mb-2">
+        <div className="flex items-center gap-2 text-muted-foreground text-sm mb-2">
           <Activity className="w-4 h-4" />
           <span>Total Trades</span>
         </div>
-        <div className="text-2xl font-bold text-white">
+        <div className="text-2xl font-bold text-foreground">
           <AnimatedCounter value={totalTrades} decimals={0} />
         </div>
       </motion.div>
@@ -99,13 +92,13 @@ export function StatsRow({ portfolioValue, dailyPnL, totalTrades, winRate }: Sta
         variants={cardVariants}
         initial="hidden"
         animate="visible"
-        className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl p-4"
+        className="bg-card border border-border rounded-xl p-4"
       >
-        <div className="flex items-center gap-2 text-gray-400 text-sm mb-2">
+        <div className="flex items-center gap-2 text-muted-foreground text-sm mb-2">
           <Target className="w-4 h-4" />
           <span>Win Rate</span>
         </div>
-        <div className="text-2xl font-bold text-white mb-2">
+        <div className="text-2xl font-bold text-foreground mb-2">
           <AnimatedCounter value={winRate} suffix="%" decimals={1} />
         </div>
         <Progress value={winRate} className="h-1.5" />

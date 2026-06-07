@@ -24,9 +24,9 @@ interface TradeRecord {
 function HistorySkeleton() {
   return (
     <div className="space-y-3">
-      <Skeleton className="h-10 w-full bg-gray-800 rounded-lg" />
+      <Skeleton className="h-10 w-full rounded-lg" />
       {Array.from({ length: 6 }).map((_, i) => (
-        <Skeleton key={i} className="h-14 w-full bg-gray-800 rounded-lg" />
+        <Skeleton key={i} className="h-14 w-full rounded-lg" />
       ))}
     </div>
   );
@@ -36,7 +36,6 @@ export default function HistoryPage() {
   const [trades, setTrades] = useState<TradeRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Computed stats from actual data
   const totalPnL = trades.reduce((sum, t) => sum + (t.pnl || 0), 0);
   const closedTrades = trades.filter(t => t.pnl != null && t.status !== 'OPEN' && t.status !== 'PENDING');
   const wins = closedTrades.filter(t => (t.pnl || 0) > 0).length;
@@ -67,7 +66,7 @@ export default function HistoryPage() {
   }, [fetchHistory]);
 
   const pnlClass = (pnl?: number) =>
-    pnl == null ? 'text-gray-400' : pnl >= 0 ? 'text-green-400' : 'text-red-400';
+    pnl == null ? 'text-muted-foreground' : pnl >= 0 ? 'text-green-600' : 'text-red-600';
 
   const formatPnL = (pnl: number) =>
     `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
@@ -85,15 +84,14 @@ export default function HistoryPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <History className="w-7 h-7 text-blue-400" />
+          <History className="w-7 h-7 text-blue-600" />
           <h1 className="text-2xl font-bold">Session History</h1>
-          <Badge variant="outline" className="text-gray-400 border-gray-700">
+          <Badge variant="outline" className="text-muted-foreground">
             {trades.length} trades
           </Badge>
         </div>
         <Button
           variant="outline"
-          className="border-gray-700 text-gray-300 hover:bg-gray-800"
           onClick={fetchHistory}
         >
           <RefreshCw className="w-4 h-4 mr-2" />
@@ -103,39 +101,39 @@ export default function HistoryPage() {
 
       {/* Stats Summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl">
+        <Card className="bg-card border border-border rounded-xl">
           <CardContent className="p-4 flex items-center gap-3">
-            <DollarSign className="w-5 h-5 text-blue-400" />
+            <DollarSign className="w-5 h-5 text-blue-600" />
             <div>
-              <p className="text-xs text-gray-500">Total P&L</p>
+              <p className="text-xs text-muted-foreground">Total P&L</p>
               <p className={`text-lg font-bold ${pnlClass(totalPnL)}`}>{formatPnL(totalPnL)}</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl">
+        <Card className="bg-card border border-border rounded-xl">
           <CardContent className="p-4 flex items-center gap-3">
-            <TrendingUp className="w-5 h-5 text-green-400" />
+            <TrendingUp className="w-5 h-5 text-green-600" />
             <div>
-              <p className="text-xs text-gray-500">Win Rate</p>
-              <p className="text-lg font-bold text-white">{winRate}%</p>
+              <p className="text-xs text-muted-foreground">Win Rate</p>
+              <p className="text-lg font-bold text-foreground">{winRate}%</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl">
+        <Card className="bg-card border border-border rounded-xl">
           <CardContent className="p-4 flex items-center gap-3">
-            <TrendingUp className="w-5 h-5 text-green-400" />
+            <TrendingUp className="w-5 h-5 text-green-600" />
             <div>
-              <p className="text-xs text-gray-500">Best Trade</p>
-              <p className="text-lg font-bold text-green-400">{formatPnL(bestTrade)}</p>
+              <p className="text-xs text-muted-foreground">Best Trade</p>
+              <p className="text-lg font-bold text-green-600">{formatPnL(bestTrade)}</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl">
+        <Card className="bg-card border border-border rounded-xl">
           <CardContent className="p-4 flex items-center gap-3">
-            <TrendingDown className="w-5 h-5 text-red-400" />
+            <TrendingDown className="w-5 h-5 text-red-600" />
             <div>
-              <p className="text-xs text-gray-500">Worst Trade</p>
-              <p className="text-lg font-bold text-red-400">{formatPnL(worstTrade)}</p>
+              <p className="text-xs text-muted-foreground">Worst Trade</p>
+              <p className="text-lg font-bold text-red-600">{formatPnL(worstTrade)}</p>
             </div>
           </CardContent>
         </Card>
@@ -143,19 +141,18 @@ export default function HistoryPage() {
 
       {/* Trade Table */}
       {trades.length === 0 ? (
-        <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl">
+        <Card className="bg-card border border-border rounded-xl">
           <CardContent className="p-12 text-center">
-            <History className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-300 mb-2">No Trade History</h2>
-            <p className="text-gray-400 max-w-md mx-auto">
+            <History className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+            <h2 className="text-xl font-semibold text-foreground mb-2">No Trade History</h2>
+            <p className="text-muted-foreground max-w-md mx-auto">
               Your trade history will appear here once you start trading. Go to the Signals page to generate and execute your first trade.
             </p>
           </CardContent>
         </Card>
       ) : (
-        <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl overflow-hidden">
-          {/* Table Header */}
-          <div className="grid grid-cols-7 gap-4 px-4 py-3 border-b border-gray-800 text-xs font-medium text-gray-500 uppercase tracking-wider">
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <div className="grid grid-cols-7 gap-4 px-4 py-3 border-b border-border text-xs font-medium text-muted-foreground uppercase tracking-wider">
             <span>Symbol</span>
             <span>Side</span>
             <span>Type</span>
@@ -165,38 +162,37 @@ export default function HistoryPage() {
             <span className="text-right">Closed</span>
           </div>
 
-          {/* Table Body */}
-          <div className="divide-y divide-gray-800/50">
+          <div className="divide-y divide-border">
             {trades.map((trade) => (
               <div
                 key={trade.id}
-                className="grid grid-cols-7 gap-4 px-4 py-3 items-center text-sm hover:bg-gray-800/30 transition-colors"
+                className="grid grid-cols-7 gap-4 px-4 py-3 items-center text-sm hover:bg-accent transition-colors"
               >
-                <span className="font-medium text-white">{trade.symbol}</span>
+                <span className="font-medium text-foreground">{trade.symbol}</span>
                 <div>
                   <Badge
                     variant="outline"
                     className={
                       trade.side === 'BUY'
-                        ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                        : 'bg-red-500/20 text-red-400 border-red-500/30'
+                        ? 'bg-green-500/15 text-green-600 border-green-500/30'
+                        : 'bg-red-500/15 text-red-600 border-red-500/30'
                     }
                   >
                     {trade.side}
                   </Badge>
                 </div>
-                <span className="text-gray-400">{trade.type}</span>
-                <span className="text-gray-300">{trade.quantity}</span>
-                <span className="text-gray-300">${trade.price.toFixed(2)}</span>
+                <span className="text-muted-foreground">{trade.type}</span>
+                <span className="text-foreground/80">{trade.quantity}</span>
+                <span className="text-foreground/80">${trade.price.toFixed(2)}</span>
                 <div>
                   {trade.pnl != null ? (
                     <span className={pnlClass(trade.pnl)}>{formatPnL(trade.pnl)}</span>
                   ) : (
-                    <span className="text-gray-500">--</span>
+                    <span className="text-muted-foreground">--</span>
                   )}
                 </div>
                 <div className="text-right">
-                  <span className="text-gray-500 text-xs">
+                  <span className="text-muted-foreground text-xs">
                     {trade.closedAt
                       ? new Date(trade.closedAt).toLocaleDateString()
                       : trade.filledAt

@@ -28,9 +28,9 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
   const isPositive = value >= 0;
 
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 shadow-lg">
-      <div className="text-gray-400 text-xs mb-1">{label}</div>
-      <div className={cn('text-sm font-bold', isPositive ? 'text-green-400' : 'text-red-400')}>
+    <div className="bg-white border border-border rounded-lg px-3 py-2 shadow-lg">
+      <div className="text-muted-foreground text-xs mb-1">{label}</div>
+      <div className={cn('text-sm font-bold', isPositive ? 'text-green-600' : 'text-red-600')}>
         ${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       </div>
     </div>
@@ -40,15 +40,14 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 export function PnLChart({ data, height = 300 }: PnLChartProps) {
   const hasData = data.length > 0;
 
-  // Determine the dominant color based on latest value
   const latestValue = hasData ? data[data.length - 1].value : 0;
   const gradientId = 'pnlGradient';
-  const gradientColor = latestValue >= 0 ? '#22c55e' : '#ef4444';
-  const gradientFade = latestValue >= 0 ? 'rgba(34, 197, 94, 0.05)' : 'rgba(239, 68, 68, 0.05)';
+  const gradientColor = latestValue >= 0 ? '#16a34a' : '#dc2626';
+  const gradientFade = latestValue >= 0 ? 'rgba(22, 163, 74, 0.05)' : 'rgba(220, 38, 38, 0.05)';
 
   return (
-    <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl p-4">
-      <h3 className="text-white font-semibold text-sm mb-3">P&L Chart</h3>
+    <div className="bg-card border border-border rounded-xl p-4">
+      <h3 className="text-foreground font-semibold text-sm mb-3">P&L Chart</h3>
       <div style={{ height }}>
         {hasData ? (
           <ResponsiveContainer width="100%" height="100%">
@@ -59,16 +58,16 @@ export function PnLChart({ data, height = 300 }: PnLChartProps) {
                   <stop offset="95%" stopColor={gradientFade} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
               <XAxis
                 dataKey="timestamp"
-                tick={{ fill: '#9ca3af', fontSize: 11 }}
-                axisLine={{ stroke: '#374151' }}
+                tick={{ fill: '#6b7280', fontSize: 11 }}
+                axisLine={{ stroke: '#e5e7eb' }}
                 tickLine={false}
               />
               <YAxis
-                tick={{ fill: '#9ca3af', fontSize: 11 }}
-                axisLine={{ stroke: '#374151' }}
+                tick={{ fill: '#6b7280', fontSize: 11 }}
+                axisLine={{ stroke: '#e5e7eb' }}
                 tickLine={false}
                 tickFormatter={(v: number) => `$${v.toLocaleString()}`}
                 width={70}
@@ -84,7 +83,7 @@ export function PnLChart({ data, height = 300 }: PnLChartProps) {
             </AreaChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex items-center justify-center h-full text-gray-500 text-sm">
+          <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
             No P&L data available
           </div>
         )}

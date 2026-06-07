@@ -19,11 +19,11 @@ interface ActivityLogProps {
 }
 
 const LOG_CONFIG: Record<string, { emoji: string; color: string; bg: string }> = {
-  TRADE: { emoji: '💰', color: 'text-green-400', bg: 'bg-green-500/10' },
-  SIGNAL: { emoji: '🎯', color: 'text-blue-400', bg: 'bg-blue-500/10' },
-  ERROR: { emoji: '❌', color: 'text-red-400', bg: 'bg-red-500/10' },
-  WARN: { emoji: '⚠️', color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
-  INFO: { emoji: '📋', color: 'text-gray-400', bg: 'bg-gray-500/10' },
+  TRADE: { emoji: '💰', color: 'text-green-600', bg: 'bg-green-500/10' },
+  SIGNAL: { emoji: '🎯', color: 'text-blue-600', bg: 'bg-blue-500/10' },
+  ERROR: { emoji: '❌', color: 'text-red-600', bg: 'bg-red-500/10' },
+  WARN: { emoji: '⚠️', color: 'text-yellow-600', bg: 'bg-yellow-500/10' },
+  INFO: { emoji: '📋', color: 'text-muted-foreground', bg: 'bg-muted' },
 };
 
 const ALL_LEVELS = ['TRADE', 'SIGNAL', 'ERROR', 'WARN', 'INFO'];
@@ -38,7 +38,6 @@ export function ActivityLog({ logs, maxItems = 100 }: ActivityLogProps) {
     return items.slice(-maxItems);
   }, [logs, activeFilter, maxItems]);
 
-  // Auto-scroll to latest
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [filteredLogs.length]);
@@ -60,9 +59,9 @@ export function ActivityLog({ logs, maxItems = 100 }: ActivityLogProps) {
   };
 
   return (
-    <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl p-4">
+    <div className="bg-card border border-border rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-white font-semibold text-sm">Activity Log</h3>
+        <h3 className="text-foreground font-semibold text-sm">Activity Log</h3>
       </div>
 
       {/* Filter Buttons */}
@@ -78,7 +77,7 @@ export function ActivityLog({ logs, maxItems = 100 }: ActivityLogProps) {
                 'flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors border',
                 isActive
                   ? cn(config.bg, config.color, 'border-current/30')
-                  : 'text-gray-500 border-gray-700/50 hover:border-gray-600 hover:text-gray-300'
+                  : 'text-muted-foreground border-border hover:bg-accent hover:text-foreground'
               )}
             >
               <span>{config.emoji}</span>
@@ -89,7 +88,7 @@ export function ActivityLog({ logs, maxItems = 100 }: ActivityLogProps) {
         {activeFilter && (
           <button
             onClick={() => setActiveFilter(null)}
-            className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-gray-500 border border-gray-700/50 hover:border-gray-600 hover:text-gray-300 transition-colors"
+            className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-muted-foreground border border-border hover:bg-accent hover:text-foreground transition-colors"
           >
             ✕ Clear
           </button>
@@ -97,10 +96,10 @@ export function ActivityLog({ logs, maxItems = 100 }: ActivityLogProps) {
       </div>
 
       {/* Log Entries */}
-      <div className="max-h-80 overflow-y-auto rounded-lg bg-gray-950/50 border border-gray-800/50">
+      <div className="max-h-80 overflow-y-auto rounded-lg bg-muted/50 border border-border">
         <ScrollArea className="h-full max-h-80">
           {filteredLogs.length === 0 ? (
-            <div className="flex items-center justify-center py-8 text-gray-500 text-sm">
+            <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
               No log entries
             </div>
           ) : (
@@ -114,7 +113,7 @@ export function ActivityLog({ logs, maxItems = 100 }: ActivityLogProps) {
                   <div
                     key={entry.id}
                     className={cn(
-                      'px-3 py-2 border-b border-gray-800/30 last:border-0 transition-colors',
+                      'px-3 py-2 border-b border-border/50 last:border-0 transition-colors',
                       config.bg,
                       isExpanded && 'bg-opacity-20'
                     )}
@@ -135,7 +134,7 @@ export function ActivityLog({ logs, maxItems = 100 }: ActivityLogProps) {
                           >
                             {entry.level}
                           </Badge>
-                          <span className="text-gray-500 text-xs font-mono">
+                          <span className="text-muted-foreground text-xs font-mono">
                             {entry.timestamp}
                           </span>
                         </div>
@@ -143,7 +142,7 @@ export function ActivityLog({ logs, maxItems = 100 }: ActivityLogProps) {
                           {entry.message}
                         </p>
                         {isExpanded && hasData && (
-                          <pre className="mt-2 p-2 bg-gray-900/80 rounded-md text-xs text-gray-400 overflow-x-auto font-mono">
+                          <pre className="mt-2 p-2 bg-muted rounded-md text-xs text-muted-foreground overflow-x-auto font-mono">
                             {typeof entry.data === 'string'
                               ? entry.data
                               : JSON.stringify(entry.data, null, 2)}
@@ -151,7 +150,7 @@ export function ActivityLog({ logs, maxItems = 100 }: ActivityLogProps) {
                         )}
                       </div>
                       {hasData && (
-                        <span className="text-gray-600 text-xs shrink-0 mt-1">
+                        <span className="text-muted-foreground text-xs shrink-0 mt-1">
                           {isExpanded ? '▲' : '▼'}
                         </span>
                       )}

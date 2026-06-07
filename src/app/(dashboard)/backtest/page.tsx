@@ -30,7 +30,7 @@ function ResultsSkeleton() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
       {Array.from({ length: 5 }).map((_, i) => (
-        <Skeleton key={i} className="h-24 bg-gray-800 rounded-xl" />
+        <Skeleton key={i} className="h-24 rounded-xl" />
       ))}
     </div>
   );
@@ -102,10 +102,10 @@ export default function BacktestPage() {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold">Backtest</h1>
-        <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl p-12 text-center">
+        <div className="bg-card border border-border rounded-xl p-12 text-center">
           <div className="animate-spin w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-400">Running backtest...</h3>
-          <p className="text-sm text-gray-500 mt-1">Analyzing {symbol} with {strategy} strategy</p>
+          <h3 className="text-lg font-medium text-foreground">Running backtest...</h3>
+          <p className="text-sm text-muted-foreground mt-1">Analyzing {symbol} with {strategy} strategy</p>
         </div>
       </div>
     );
@@ -114,61 +114,57 @@ export default function BacktestPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <FlaskConical className="w-7 h-7 text-blue-400" />
+        <FlaskConical className="w-7 h-7 text-blue-600" />
         <h1 className="text-2xl font-bold">Backtest</h1>
       </div>
 
       {/* Configuration */}
-      <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl">
+      <Card className="bg-card border border-border rounded-xl">
         <CardHeader className="pb-4">
-          <CardTitle className="text-lg font-semibold text-white">Configuration</CardTitle>
+          <CardTitle className="text-lg font-semibold text-foreground">Configuration</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="space-y-1.5">
-              <Label className="text-sm text-gray-400">Symbol</Label>
+              <Label className="text-sm text-muted-foreground">Symbol</Label>
               <Input
                 value={symbol}
                 onChange={(e) => setSymbol(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-white"
                 placeholder="BTCUSDT"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-sm text-gray-400">Start Date</Label>
+              <Label className="text-sm text-muted-foreground">Start Date</Label>
               <Input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-white"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-sm text-gray-400">End Date</Label>
+              <Label className="text-sm text-muted-foreground">End Date</Label>
               <Input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-white"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-sm text-gray-400">Initial Capital ($)</Label>
+              <Label className="text-sm text-muted-foreground">Initial Capital ($)</Label>
               <Input
                 type="number"
                 value={initialCapital}
                 onChange={(e) => setInitialCapital(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-white"
                 min="100"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-sm text-gray-400">Strategy</Label>
+              <Label className="text-sm text-muted-foreground">Strategy</Label>
               <Select value={strategy} onValueChange={setStrategy}>
-                <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectContent>
                   {strategies.map((s) => (
                     <SelectItem key={s.value} value={s.value}>
                       {s.label}
@@ -181,7 +177,7 @@ export default function BacktestPage() {
           <div className="mt-4">
             <Button
               onClick={handleRunBacktest}
-              className="bg-blue-600 hover:bg-blue-700"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
               disabled={isRunning}
             >
               <Play className="w-4 h-4 mr-2" />
@@ -195,61 +191,60 @@ export default function BacktestPage() {
       {isRunning && <ResultsSkeleton />}
       {results && (
         <>
-          {/* Stats Cards */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl">
+            <Card className="bg-card border border-border rounded-xl">
               <CardContent className="p-4 flex items-center gap-3">
-                <TrendingUp className={`w-5 h-5 ${results.totalReturn >= 0 ? 'text-green-400' : 'text-red-400'}`} />
+                <TrendingUp className={`w-5 h-5 ${results.totalReturn >= 0 ? 'text-green-600' : 'text-red-600'}`} />
                 <div>
-                  <p className="text-xs text-gray-500">Total Return</p>
-                  <p className={`text-lg font-bold ${results.totalReturn >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  <p className="text-xs text-muted-foreground">Total Return</p>
+                  <p className={`text-lg font-bold ${results.totalReturn >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {results.totalReturn >= 0 ? '+' : ''}{results.totalReturn.toFixed(2)}%
                   </p>
                 </div>
               </CardContent>
             </Card>
-            <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl">
+            <Card className="bg-card border border-border rounded-xl">
               <CardContent className="p-4 flex items-center gap-3">
-                <Target className="w-5 h-5 text-blue-400" />
+                <Target className="w-5 h-5 text-blue-600" />
                 <div>
-                  <p className="text-xs text-gray-500">Win Rate</p>
-                  <p className="text-lg font-bold text-white">{results.winRate.toFixed(1)}%</p>
+                  <p className="text-xs text-muted-foreground">Win Rate</p>
+                  <p className="text-lg font-bold text-foreground">{results.winRate.toFixed(1)}%</p>
                 </div>
               </CardContent>
             </Card>
-            <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl">
+            <Card className="bg-card border border-border rounded-xl">
               <CardContent className="p-4 flex items-center gap-3">
-                <TrendingDown className="w-5 h-5 text-red-400" />
+                <TrendingDown className="w-5 h-5 text-red-600" />
                 <div>
-                  <p className="text-xs text-gray-500">Max Drawdown</p>
-                  <p className="text-lg font-bold text-red-400">-{results.maxDrawdown.toFixed(2)}%</p>
+                  <p className="text-xs text-muted-foreground">Max Drawdown</p>
+                  <p className="text-lg font-bold text-red-600">-{results.maxDrawdown.toFixed(2)}%</p>
                 </div>
               </CardContent>
             </Card>
-            <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl">
+            <Card className="bg-card border border-border rounded-xl">
               <CardContent className="p-4 flex items-center gap-3">
-                <BarChart3 className="w-5 h-5 text-purple-400" />
+                <BarChart3 className="w-5 h-5 text-purple-600" />
                 <div>
-                  <p className="text-xs text-gray-500">Total Trades</p>
-                  <p className="text-lg font-bold text-white">{results.totalTrades}</p>
+                  <p className="text-xs text-muted-foreground">Total Trades</p>
+                  <p className="text-lg font-bold text-foreground">{results.totalTrades}</p>
                 </div>
               </CardContent>
             </Card>
-            <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl">
+            <Card className="bg-card border border-border rounded-xl">
               <CardContent className="p-4 flex items-center gap-3">
-                <Award className="w-5 h-5 text-yellow-400" />
+                <Award className="w-5 h-5 text-yellow-600" />
                 <div>
-                  <p className="text-xs text-gray-500">Sharpe Ratio</p>
-                  <p className="text-lg font-bold text-white">{results.sharpeRatio.toFixed(2)}</p>
+                  <p className="text-xs text-muted-foreground">Sharpe Ratio</p>
+                  <p className="text-lg font-bold text-foreground">{results.sharpeRatio.toFixed(2)}</p>
                 </div>
               </CardContent>
             </Card>
           </div>
 
           {/* Equity Curve */}
-          <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl">
+          <Card className="bg-card border border-border rounded-xl">
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg font-semibold text-white">Equity Curve</CardTitle>
+              <CardTitle className="text-lg font-semibold text-foreground">Equity Curve</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="h-[300px]">
@@ -261,27 +256,27 @@ export default function BacktestPage() {
                         <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis
                       dataKey="time"
-                      stroke="#6b7280"
-                      tick={{ fill: '#9ca3af', fontSize: 11 }}
+                      stroke="#d1d5db"
+                      tick={{ fill: '#6b7280', fontSize: 11 }}
                       tickFormatter={(val: string) => {
                         const d = new Date(val);
                         return `${d.getMonth() + 1}/${d.getDate()}`;
                       }}
                     />
                     <YAxis
-                      stroke="#6b7280"
-                      tick={{ fill: '#9ca3af', fontSize: 11 }}
+                      stroke="#d1d5db"
+                      tick={{ fill: '#6b7280', fontSize: 11 }}
                       tickFormatter={(val: number) => `$${(val / 1000).toFixed(1)}k`}
                     />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: '#1f2937',
-                        border: '1px solid #374151',
+                        backgroundColor: '#ffffff',
+                        border: '1px solid #e5e7eb',
                         borderRadius: '8px',
-                        color: '#f3f4f6',
+                        color: '#111827',
                       }}
                       labelFormatter={(label: string) => new Date(label).toLocaleDateString()}
                       formatter={(value: number) => [`$${value.toFixed(2)}`, 'Equity']}

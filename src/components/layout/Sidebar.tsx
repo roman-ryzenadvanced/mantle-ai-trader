@@ -40,7 +40,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'bg-gray-900/80 backdrop-blur-md border-r border-gray-800 flex flex-col transition-all duration-300 h-full',
+        'bg-background/80 backdrop-blur-md border-r flex flex-col transition-all duration-300 h-full',
         collapsed ? 'w-16' : 'w-56'
       )}
     >
@@ -57,8 +57,8 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
               className={cn(
                 'flex items-center gap-3 w-full px-3 py-2.5 text-sm font-medium transition-colors rounded-lg mx-1',
                 isActive
-                  ? 'bg-blue-600/20 text-blue-400 border-l-2 border-blue-400'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50 border-l-2 border-transparent'
+                  ? 'bg-blue-600/10 text-blue-600 border-l-2 border-blue-600'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted border-l-2 border-transparent'
               )}
             >
               <Icon className="w-5 h-5 shrink-0" />
@@ -70,7 +70,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
             return (
               <Tooltip key={item.id} delayDuration={0}>
                 <TooltipTrigger asChild>{button}</TooltipTrigger>
-                <TooltipContent side="right" className="bg-gray-800 border-gray-700 text-white">
+                <TooltipContent side="right">
                   {item.label}
                 </TooltipContent>
               </Tooltip>
@@ -82,10 +82,10 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
       </nav>
 
       {/* Toggle Button */}
-      <div className="p-3 border-t border-gray-800">
+      <div className="p-3 border-t">
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="flex items-center justify-center w-full py-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/50 transition-colors"
+          className="flex items-center justify-center w-full py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
         >
           {collapsed ? (
             <ChevronRight className="w-4 h-4" />
