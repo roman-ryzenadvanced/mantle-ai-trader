@@ -72,12 +72,23 @@ export interface GitHubActivitySummary {
 // Default tracked crypto repos
 // ---------------------------------------------------------------------------
 
+// Repo categories for display and filtering
+export type RepoCategory = 'crypto' | 'trading' | 'defi' | 'forex' | 'economics' | 'ai-tools' | 'infra';
+
+export interface RepoMeta {
+  repo: string;
+  category: RepoCategory;
+}
+
 export const DEFAULT_CRYPTO_REPOS: string[] = [
+  // ── Crypto Core (blockchains & protocols) ──
   'bitcoin/bitcoin',
   'ethereum/go-ethereum',
   'solana-labs/solana',
-  'pytorch/pytorch',
-  'openai/whisper',
+  'cardano-foundation/cardano-node',
+  'MoneroProject/monero',
+
+  // ── DeFi Protocols ──
   'Uniswap/uniswapx',
   'Uniswap/v3-core',
   'aave/aave-v3-core',
@@ -85,10 +96,76 @@ export const DEFAULT_CRYPTO_REPOS: string[] = [
   'compound-finance/compound-protocol',
   'curvefi/curve-contract',
   'sushiswap/sushiswap',
-  'yieldfi/yield-protocol-v2',
-  'maticnetwork/bor',
+
+  // ── Trading Systems & Bots ──
+  'freqtrade/freqtrade',           // Python crypto trading bot
+  'hummingbot/humblingbot',        // Market-making bot (exchange-agnostic)
+  'ccxt/ccxt',                     // Unified crypto exchange API
+  'jesse-ai/jesse',                // AI crypto trading framework
+  'vnpy/vnpy',                     // Python trading framework (futures, forex)
+  'tensortrade-org/tensortrade',   // RL-based trading framework
+
+  // ── AI / ML for Finance ──
+  'AI4Finance-Foundation/FinRL',   // Deep reinforcement learning for finance
+  'openai/whisper',                // Speech-to-text (news sentiment analysis)
+  'huggingface/transformers',      // NLP for news/text analysis
+  'pytorch/pytorch',               // ML backbone for models
+
+  // ── Forex / Macro Systems ──
+  'datasets/currency-exchange-rates', // Open forex data
+  'QuantLib/quantlib',              // Quantitative finance library (FX, rates)
+  'ta-lib/ta-lib',                  // Technical analysis library (all markets)
+
+  // ── Infrastructure & Tooling ──
+  'maticnetwork/bor',              // Polygon PoS client
   'ArbitrumFoundation/arbitrum-tutorials',
+  'prometheus/prometheus',         // Monitoring infrastructure
+  'grafana/grafana',               // Dashboards for trading metrics
 ];
+
+// Category metadata for each tracked repo
+export const REPO_CATEGORIES: Record<string, RepoCategory> = {
+  'bitcoin/bitcoin': 'crypto',
+  'ethereum/go-ethereum': 'crypto',
+  'solana-labs/solana': 'crypto',
+  'cardano-foundation/cardano-node': 'crypto',
+  'MoneroProject/monero': 'crypto',
+  'Uniswap/uniswapx': 'defi',
+  'Uniswap/v3-core': 'defi',
+  'aave/aave-v3-core': 'defi',
+  'makerdao/dss': 'defi',
+  'compound-finance/compound-protocol': 'defi',
+  'curvefi/curve-contract': 'defi',
+  'sushiswap/sushiswap': 'defi',
+  'freqtrade/freqtrade': 'trading',
+  'hummingbot/hummingbot': 'trading',
+  'ccxt/ccxt': 'trading',
+  'jesse-ai/jesse': 'trading',
+  'vnpy/vnpy': 'trading',
+  'tensortrade-org/tensortrade': 'trading',
+  'AI4Finance-Foundation/FinRL': 'ai-tools',
+  'openai/whisper': 'ai-tools',
+  'huggingface/transformers': 'ai-tools',
+  'pytorch/pytorch': 'ai-tools',
+  'datasets/currency-exchange-rates': 'forex',
+  'QuantLib/quantlib': 'economics',
+  'ta-lib/ta-lib': 'trading',
+  'maticnetwork/bor': 'crypto',
+  'ArbitrumFoundation/arbitrum-tutorials': 'crypto',
+  'prometheus/prometheus': 'infra',
+  'grafana/grafana': 'infra',
+};
+
+// Human-readable labels for categories
+export const CATEGORY_LABELS: Record<RepoCategory, { label: string; color: string; icon: string }> = {
+  crypto:     { label: 'Blockchain', color: 'bg-orange-500/15 text-orange-600 border-orange-500/30', icon: '⛓️' },
+  defi:       { label: 'DeFi',       color: 'bg-purple-500/15 text-purple-600 border-purple-500/30', icon: '🏦' },
+  trading:    { label: 'Trading',    color: 'bg-green-500/15 text-green-600 border-green-500/30', icon: '📈' },
+  forex:      { label: 'Forex/FX',   color: 'bg-blue-500/15 text-blue-600 border-blue-500/30', icon: '💱' },
+  economics:  { label: 'Economics',  color: 'bg-amber-500/15 text-amber-600 border-amber-500/30', icon: '📊' },
+  'ai-tools': { label: 'AI/ML',      color: 'bg-cyan-500/15 text-cyan-600 border-cyan-500/30', icon: '🤖' },
+  infra:      { label: 'Infra',      color: 'bg-gray-500/15 text-gray-600 border-gray-500/30', icon: '🔧' },
+};
 
 // ---------------------------------------------------------------------------
 // Helpers

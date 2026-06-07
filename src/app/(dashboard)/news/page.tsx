@@ -8,8 +8,9 @@ import {
   Newspaper, RefreshCw, ExternalLink, AlertTriangle,
   Github, GitPullRequest, GitCommit, Star,
   TrendingUp, TrendingDown, Minus, Package, MessageSquare,
-  Activity, BarChart3, Clock, ArrowRight, Zap
+  Activity, BarChart3, Clock, ArrowRight, Zap, Filter
 } from 'lucide-react';
+import { DEFAULT_CRYPTO_REPOS, REPO_CATEGORIES, CATEGORY_LABELS, type RepoCategory } from '@/lib/trading/github-activity';
 import { toast } from 'sonner';
 
 // ==================== Types ====================
@@ -123,6 +124,7 @@ interface MarketIntelligence {
 }
 
 type Tab = 'news' | 'github';
+type CategoryFilter = RepoCategory | 'all';
 
 // ==================== Helpers ====================
 
@@ -402,10 +404,12 @@ function IntelligenceBar({
 // ==================== GitHub Repo Card ====================
 
 function RepoCard({ summary }: { summary: GitHubActivitySummary }) {
-  const { repoInfo, activityScore, developerSentiment, recentCommits, recentReleases, recentIssues, topFeatureRequest, topComplaint } = summary;
+  const { repo, repoInfo, activityScore, developerSentiment, recentCommits, recentReleases, recentIssues, topFeatureRequest, topComplaint } = summary;
 
   const prs = recentIssues.filter(i => i.isPR);
   const openIssues = recentIssues.filter(i => !i.isPR && i.state === 'open');
+  const category = REPO_CATEGORIES[repo];
+  const catMeta = category ? CATEGORY_LABELS[category] : null;
 
   return (
     <div className="bg-card border border-border rounded-xl p-4 space-y-3 transition-colors hover:bg-accent/50">
@@ -421,6 +425,11 @@ function RepoCard({ summary }: { summary: GitHubActivitySummary }) {
           >
             {repoInfo.fullName}
           </a>
+          {catMeta && (
+            <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium flex-shrink-0 ${catMeta.color}`}>
+              {catMeta.icon} {catMeta.label}
+            </span>
+          )}
           {repoInfo.language && (
             <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground flex-shrink-0">
               {repoInfo.language}
@@ -615,6 +624,7 @@ export default function NewsPage() {
     intelligence: MarketIntelligence | null;
   } | null>(null);
   const [loadingGithub, setLoadingGithub] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
 
   // Fetch news
   const fetchNews = useCallback(async () => {
@@ -804,21 +814,47 @@ export default function NewsPage() {
       {/* ==================== GITHUB TAB (last30days integration) ==================== */}
       {activeTab === 'github' && (
         <div className="space-y-6">
-          {/* Powered by badge */}
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Powered by</span>
-            <Badge variant="outline" className="text-blue-600 border-blue-500/30">
-              last30days v3.3.2 - GitHub Analysis Module
-            </Badge>
-            <a
-              href="https://github.com/mvanhorn/last30days-skill"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-blue-600 flex items-center gap-0.5"
-            >
-              <ExternalLink className="w-3 h-3" />
-              Learn more
-            </a>
+          {/* Top row: powered by badge + category filter */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            {/* Powered by badge */}
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Powered by</span>
+              <Badge variant="outline" className="text-blue-600 border-blue-500/30">
+                last30days v3.3.2 - GitHub Analysis Module
+              </Badge>
+              <a
+                href="https://github.com/mvanhorn/last30days-skill"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-blue-600 flex items-center gap-0.5"
+              >
+                <ExternalLink className="w-3 h-3" />
+                Learn more
+              </a>
+            </div>
+
+            {/* Category filter pills */}
+            {githubData && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+                {(['all', 'crypto', 'defi', 'trading', 'forex', 'economics', 'ai-tools', 'infra'] as const).map(cat => {
+                  const meta = cat === 'all' ? { label: 'All', color: categoryFilter === 'all' ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:bg-accent', icon: '' } : CATEGORY_LABELS[cat];
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => setCategoryFilter(cat)}
+                      className={`text-[11px] px-2 py-1 rounded-md font-medium transition-colors ${
+                        cat === 'all'
+                          ? (categoryFilter === 'all' ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:bg-accent')
+                          : (categoryFilter === cat ? meta.color : 'bg-muted text-muted-foreground hover:bg-accent')
+                      }`}
+                    >
+                      {cat === 'all' ? 'All' : `${meta.icon} ${meta.label}`}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {loadingGithub ? (
@@ -851,17 +887,30 @@ export default function NewsPage() {
               <IntelligenceBar intel={githubData.intelligence} />
 
               {/* Repo Cards Grid */}
-              {githubData.summaries.length === 0 ? (
-                <div className="bg-card border border-border rounded-xl p-8 text-center">
-                  <p className="text-muted-foreground">No repository data returned. Check your GITHUB_TOKEN in .env.local.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {githubData.summaries.map((summary) => (
-                    <RepoCard key={summary.repo} summary={summary} />
-                  ))}
-                </div>
-              )}
+              {(() => {
+                const filtered = categoryFilter === 'all'
+                  ? githubData.summaries
+                  : githubData.summaries.filter(s => REPO_CATEGORIES[s.repo] === categoryFilter);
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="bg-card border border-border rounded-xl p-8 text-center">
+                      <p className="text-muted-foreground">
+                        {categoryFilter === 'all' ? 'No repository data returned. Check your GITHUB_TOKEN in .env.local.' :
+                          `No repos in the "${CATEGORY_LABELS[categoryFilter]?.label || categoryFilter}" category.`}
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {filtered.map((summary) => (
+                        <RepoCard key={summary.repo} summary={summary} />
+                      ))}
+                    </div>
+                  );
+                })()}
 
               {/* Two-column bottom section: Hot Issues + Recent Releases */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
