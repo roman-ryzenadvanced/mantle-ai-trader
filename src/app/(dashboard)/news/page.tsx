@@ -628,10 +628,11 @@ function RecentReleasesList({
   );
 }
 
-// ==================== Countdown Timer (live updating) ====================
+// ==================== Countdown Timer (live 1-second updates) ====================
 
 function CountdownTimer({ targetDate, className }: { targetDate: string; className?: string }) {
   const [text, setText] = useState<string>('--');
+  const [isUrgent, setIsUrgent] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -640,38 +641,44 @@ function CountdownTimer({ targetDate, className }: { targetDate: string; classNa
     if (isNaN(d.getTime())) { setText('invalid'); return; }
 
     const tick = () => {
-      const diff = d.getTime() - Date.now();
-      if (diff <= 0) { setText('NOW'); if (intervalRef.current) clearInterval(intervalRef.current); return; }
+      const now = Date.now();
+      const diff = d.getTime() - now;
+
+      // Event has passed
+      if (diff <= 0) {
+        setText('NOW');
+        setIsUrgent(true);
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        return;
+      }
+
+      const urgent = diff <= 3600000;
+      setIsUrgent(urgent);
 
       const days = Math.floor(diff / 86400000);
       const hours = Math.floor((diff % 86400000) / 3600000);
       const mins = Math.floor((diff % 3600000) / 60000);
       const secs = Math.floor((diff % 60000) / 1000);
 
-      if (days > 0) setText(`${days}d ${hours}h ${mins}m`);
+      // Always show seconds so user sees real-time ticking
+      if (days > 0) setText(`${days}d ${hours}h ${mins}m ${secs}s`);
       else if (hours > 0) setText(`${hours}h ${mins}m ${secs}s`);
       else setText(`${mins}m ${secs}s`);
     };
 
-    tick();
-    // Compute initial diff for rate selection
-    const initialDiff = d.getTime() - Date.now();
-    const rate = initialDiff > 86400000 ? 60000 : initialDiff > 3600000 ? 10000 : 1000;
-    intervalRef.current = setInterval(tick, rate);
+    tick(); // immediate first render
+    intervalRef.current = setInterval(tick, 1000); // always 1s — feels alive
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [targetDate]);
 
-  const isUrgent = (() => {
-    if (!targetDate || text === 'NOW' || text === '--') return false;
-    const d = new Date(targetDate);
-    return !isNaN(d.getTime()) && (d.getTime() - Date.now()) <= 3600000;
-  })();
-
   return (
-    <span className={`inline-flex items-center gap-1 font-mono font-semibold tabular-nums ${className || ''} ${
-      isUrgent ? 'text-red-600 animate-pulse' : 'text-blue-600'
-    }`}>
-      <Timer className="w-3.5 h-3.5" />
+    <span
+      className={`inline-flex items-center gap-1 font-mono font-semibold tabular-nums ${className || ''} ${
+        isUrgent ? 'text-red-600 animate-pulse' : 'text-blue-600'
+      }`}
+      suppressHydrationWarning
+    >
+      <Timer className={`w-3.5 h-3.5 ${isUrgent ? 'animate-spin' : ''}`} />
       {text}
     </span>
   );
